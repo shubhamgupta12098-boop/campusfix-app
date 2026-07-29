@@ -125,43 +125,35 @@ export function ProfileScreen() {
 
       {/* Profile header card */}
       <Card className="overflow-hidden mb-6">
-        {/* Cover banner */}
-        <div className={`h-28 bg-gradient-to-r ${roleCfg.gradient} relative`}>
-          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.4) 0%, transparent 60%)' }} />
+        <div className={`h-24 sm:h-28 bg-gradient-to-r ${roleCfg.gradient} relative`}>
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.45) 0%, transparent 60%)' }} />
         </div>
 
-        <div className="px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12">
-            {/* Avatar */}
-            <div className={`w-24 h-24 rounded-2xl bg-gradient-to-br ${roleCfg.gradient} flex items-center justify-center text-white text-2xl font-bold shadow-lg ring-4 ring-white flex-shrink-0`}>
+        <div className="px-5 sm:px-6 pb-6">
+          <div className="relative pt-14 sm:pt-16">
+            <div className={`absolute -top-11 left-0 w-[5.5rem] h-[5.5rem] sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br ${roleCfg.gradient} flex items-center justify-center text-white text-2xl font-bold shadow-lg ring-4 ring-white`}>
               {initials}
             </div>
 
-            <div className="flex-1 sm:pb-2">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-bold text-slate-900">{profile?.full_name}</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{profile?.full_name}</h2>
                 <Badge className={`${roleCfg.bg} ${roleCfg.text}`}>
                   <Shield className="w-3 h-3" />
                   {ROLE_LABELS[role]}
                 </Badge>
               </div>
-              <p className="text-sm text-slate-500 mt-1">{profile?.college_id || 'No college ID'} {profile?.department && `· ${profile.department}`}</p>
+              <p className="text-sm text-slate-500 mt-1 break-words">{profile?.college_id || 'No college ID'} {profile?.department && `· ${profile.department}`}</p>
             </div>
 
-            <button
-              onClick={() => setEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors sm:mb-2"
-            >
-              <Edit3 className="w-4 h-4" />
-              Edit Profile
-            </button>
-            <button
-              onClick={() => setPwOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors sm:mb-2"
-            >
-              <KeyRound className="w-4 h-4" />
-              Change Password
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+              <button onClick={() => setEditing(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                <Edit3 className="w-4 h-4" /> Edit Profile
+              </button>
+              <button onClick={() => setPwOpen(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                <KeyRound className="w-4 h-4" /> Change Password
+              </button>
+            </div>
           </div>
         </div>
       </Card>

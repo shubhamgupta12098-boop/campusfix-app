@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
 import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle } from 'lucide-react';
@@ -15,6 +15,7 @@ import { TechnicianJobsScreen } from '@/screens/TechnicianJobsScreen';
 import { AssignComplaintsScreen } from '@/screens/AssignComplaintsScreen';
 import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
+import { supabase } from '@/lib/supabase';
 
 type Screen =
   | 'dashboard'
@@ -58,9 +59,22 @@ export const AppShell = () => {
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const role = (profile?.role ?? 'student') as UserRole;
   const items = NAV_ITEMS.filter((i) => i.roles.includes(role));
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    let active = true;
+    const loadUnread = async () => {
+      const result = await supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+      if (active) setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
+    };
+    void loadUnread();
+    const timer = window.setInterval(loadUnread, 15000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [profile?.id, screen]);
 
   const openComplaint = (id: string) => {
     setSelectedComplaintId(id);
@@ -123,7 +137,8 @@ export const AppShell = () => {
                 }`}
               >
                 <Icon className={`w-[18px] h-[18px] ${active ? 'text-blue-600' : 'text-slate-400'}`} />
-                {item.label}
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.id === 'notifications' && unreadNotifications > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
               </button>
             );
           })}
@@ -164,8 +179,9 @@ export const AppShell = () => {
             </div>
             <span className="font-bold text-slate-900">CampusFix</span>
           </div>
-          <button onClick={() => navigate('notifications')} className="text-slate-600">
+          <button onClick={() => navigate('notifications')} className="relative text-slate-600 p-1">
             <Bell className="w-5 h-5" />
+            {unreadNotifications > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
           </button>
         </header>
 
