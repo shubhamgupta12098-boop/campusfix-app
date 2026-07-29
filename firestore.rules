@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownProfile() { return signedIn() && request.auth.uid == resource.id; }
+    function roleIs(roles) {
+      return signedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role in roles;
+    }
+    match /profiles/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn();
+      allow update: if request.auth.uid == userId || roleIs(['admin']);
+    }
+    match /complaints/{id} {
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow read: if signedIn();
+      allow update: if signedIn() && (resource.data.user_id == request.auth.uid || roleIs(['technician','supervisor','admin']));
+    }
+    match /notifications/{id} { allow read, write: if signedIn(); }
+    match /complaint_status_history/{id} { allow read, create: if signedIn(); }
+    match /work_orders/{id} { allow read, write: if signedIn(); }
+    match /inventory_items/{id} { allow read: if signedIn(); allow write: if roleIs(['supervisor','admin']); }
+    match /inventory_transactions/{id} { allow read: if signedIn(); allow create: if roleIs(['technician','supervisor','admin']); }
+    match /preventive_maintenance_schedules/{id} { allow read: if signedIn(); allow write: if roleIs(['supervisor','admin']); }
+    match /technicians/{id} { allow read: if signedIn(); allow write: if request.auth.uid == id || roleIs(['supervisor','admin']); }
+    match /complaint_categories/{id} { allow read: if signedIn(); allow write: if roleIs(['admin']); }
+    match /buildings/{id} { allow read: if signedIn(); allow write: if roleIs(['admin']); }
+  }
+}
