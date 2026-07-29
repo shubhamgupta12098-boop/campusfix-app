@@ -3,6 +3,7 @@ import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
 import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle } from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
+import { AdminDashboardScreen } from '@/screens/AdminDashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
 import { ComplaintDetailScreen } from '@/screens/ComplaintDetailScreen';
@@ -186,7 +187,7 @@ export const AppShell = () => {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-          {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} />}
+          {screen === 'dashboard' && (role === 'admin' ? <AdminDashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} /> : <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} />)}
           {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')} />}
           {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint} />}
           {screen === 'complaint-detail' && selectedComplaintId && (
