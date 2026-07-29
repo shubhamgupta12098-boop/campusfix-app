@@ -10,20 +10,29 @@ export function MyComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: 
   const { profile } = useAuthStore();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ComplaintStatus | 'all'>('all');
 
   useEffect(() => {
-    void load();
-  }, []);
+    if (profile?.id) void load();
+  }, [profile?.id]);
 
   const load = async () => {
-    const { data } = await supabase
+    if (!profile?.id) return;
+    setLoading(true);
+    setLoadError(null);
+    const { data, error } = await supabase
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*)')
-      .eq('user_id', profile?.id)
+      .eq('user_id', profile.id)
       .order('created_at', { ascending: false });
-    setComplaints((data || []) as unknown as Complaint[]);
+    if (error) {
+      setLoadError(error.message || 'Complaints could not be loaded.');
+      setComplaints([]);
+    } else {
+      setComplaints((data || []) as unknown as Complaint[]);
+    }
     setLoading(false);
   };
 
@@ -67,6 +76,15 @@ export function MyComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: 
           ))}
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-center justify-between gap-3">
+            <span>{loadError}</span>
+            <button onClick={() => void load()} className="font-semibold underline">Retry</button>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <Card className="p-0">

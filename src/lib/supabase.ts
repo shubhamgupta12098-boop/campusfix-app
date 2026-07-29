@@ -29,7 +29,34 @@ class FirebaseQueryBuilder {
  constructor(private table:string){} select(_='*'){if(this.action==='select')this.action='select';return this;} insert(v:any){this.action='insert';this.payload=v;return this;} update(v:any){this.action='update';this.payload=v;return this;} delete(){this.action='delete';return this;} eq(field:string,value:unknown){this.filters.push({field,op:'eq',value});return this;} in(field:string,value:unknown[]){this.filters.push({field,op:'in',value});return this;} order(field:string,o?:{ascending?:boolean}){this.sort={field,ascending:o?.ascending!==false};return this;} limit(v:number){this.max=v;return this;} single(){this.one='single';return this;} maybeSingle(){this.one='maybeSingle';return this;}
  then<TResult1=Result,TResult2=never>(ok?:((v:Result)=>TResult1|PromiseLike<TResult1>)|null,bad?:((r:any)=>TResult2|PromiseLike<TResult2>)|null){return this.execute().then(ok,bad);}
  private structuredQuery(){const sq:any={from:[{collectionId:this.table}]}; const fs=this.filters.map(f=>({fieldFilter:{field:{fieldPath:f.field},op:f.op==='eq'?'EQUAL':'IN',value:f.op==='in'?{arrayValue:{values:(f.value as any[]).map(toFirestoreValue)}}:toFirestoreValue(f.value)}})); if(fs.length===1)sq.where=fs[0];else if(fs.length>1)sq.where={compositeFilter:{op:'AND',filters:fs}};if(this.sort)sq.orderBy=[{field:{fieldPath:this.sort.field},direction:this.sort.ascending?'ASCENDING':'DESCENDING'}];if(this.max)sq.limit=this.max;return {structuredQuery:sq};}
- private async list(){const j=await firestoreFetch(':runQuery',{method:'POST',body:JSON.stringify(this.structuredQuery())});return (j as any[]).filter(x=>x.document).map(x=>decodeDoc(x.document));}
+ private async list(){
+  // Use Firestore's document-list endpoint and apply the small app's filters
+  // client-side. This avoids composite-index failures on Android/WebView (for
+  // example: user_id equality + created_at ordering), which previously made a
+  // successfully filed complaint look as if it had disappeared.
+  const response = await firestoreFetch(`/${this.table}?pageSize=1000`, { method: 'GET' });
+  let rows = ((response as any)?.documents || []).map((document: any) => decodeDoc(document));
+
+  rows = rows.filter((row: any) => this.filters.every((filter) => {
+    if (filter.op === 'eq') return row[filter.field] === filter.value;
+    return Array.isArray(filter.value) && filter.value.includes(row[filter.field]);
+  }));
+
+  if (this.sort) {
+    const { field, ascending } = this.sort;
+    rows.sort((a: any, b: any) => {
+      const av = a[field] ?? '';
+      const bv = b[field] ?? '';
+      const result = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+      return ascending ? result : -result;
+    });
+  }
+
+  if (this.max) rows = rows.slice(0, this.max);
+  return rows;
+ }
  private async execute():Promise<Result>{try{if(this.action==='insert'){const values=Array.isArray(this.payload)?this.payload:[this.payload];const made=[];for(const raw of values){const value={created_at:nowIso(),updated_at:nowIso(),...raw};let id=value.id as string|undefined;delete value.id;if(id){const d=await firestoreFetch(`/${this.table}/${id}`,{method:'PATCH',body:JSON.stringify(encodeFields(value))});made.push(decodeDoc(d));}else{const d=await firestoreFetch(`/${this.table}`,{method:'POST',body:JSON.stringify(encodeFields(value))});made.push(decodeDoc(d));}}const data=await enrich(this.table,made);return{data:this.one?data[0]??null:data,error:null};}
  const rows=await this.list();if(this.action==='update'||this.action==='delete'){for(const r of rows){if(this.action==='delete')await firestoreFetch(`/${this.table}/${r.id}`,{method:'DELETE'});else await firestoreFetch(`/${this.table}/${r.id}`,{method:'PATCH',body:JSON.stringify(encodeFields({...this.payload,updated_at:nowIso()}))});}return{data:null,error:null};}
  const data=await enrich(this.table,rows);if(this.one==='single'&&data.length!==1)return{data:null,error:{message:`Expected one ${this.table} record, found ${data.length}.`}};return{data:this.one?data[0]??null:data,error:null};}catch(e){return{data:null,error:{message:e instanceof Error?e.message:String(e)}};}}
