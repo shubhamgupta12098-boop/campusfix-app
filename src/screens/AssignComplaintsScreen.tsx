@@ -21,7 +21,7 @@ export function AssignComplaintsScreen() {
   const load = async () => {
     const [c, t] = await Promise.all([
       supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*, technicians(*)').eq('role', 'technician').eq('is_active', true),
+      supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
     ]);
     setComplaints((c.data || []) as unknown as Complaint[]);
     setTechnicians((t.data || []) as unknown as (Profile & { technician?: Technician })[]);

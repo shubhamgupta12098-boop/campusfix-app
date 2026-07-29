@@ -21,7 +21,7 @@ export function WorkOrdersScreen() {
       .select('*, complaints(*, complaint_categories(*)), profiles!work_orders_technician_id_fkey(*)')
       .order('created_at', { ascending: false });
 
-    if (profile?.role === 'technician') {
+    if (profile?.role === 'staff') {
       q = q.eq('technician_id', profile.id);
     }
     const { data } = await q;

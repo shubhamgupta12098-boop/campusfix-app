@@ -55,39 +55,19 @@ async function authRequest(
   return json;
 }
 
-export async function sendEmailVerification(idToken: string): Promise<void> {
-  await authRequest('accounts:sendOobCode', {
-    requestType: 'VERIFY_EMAIL',
-    idToken,
-  });
-}
 
-export async function sendPasswordResetEmail(email: string): Promise<void> {
-  await authRequest('accounts:sendOobCode', {
-    requestType: 'PASSWORD_RESET',
-    email,
-    continueUrl: window.location.origin,
-  });
-}
-
-// Called when the user opens the password-reset link from their email.
-// Confirms the code is valid and returns the email address it belongs to.
-export async function verifyPasswordResetCode(oobCode: string): Promise<string> {
-  const json = await authRequest('accounts:resetPassword', { oobCode });
-  return json.email as string;
-}
-
-// Called after the user types a new password on the in-app reset screen.
-export async function confirmPasswordReset(
-  oobCode: string,
+// Changes the password for the currently signed-in user (from the Profile screen).
+// Returns fresh tokens since Firebase rotates them whenever the password changes.
+export async function updatePassword(
+  idToken: string,
   newPassword: string
-): Promise<void> {
-  await authRequest('accounts:resetPassword', { oobCode, newPassword });
-}
-
-// Confirms an email-verification link (mode=verifyEmail) opened from the inbox.
-export async function applyActionCode(oobCode: string): Promise<void> {
-  await authRequest('accounts:update', { oobCode });
+): Promise<{ idToken: string; refreshToken: string }> {
+  const json = await authRequest('accounts:update', {
+    idToken,
+    password: newPassword,
+    returnSecureToken: true,
+  });
+  return { idToken: json.idToken, refreshToken: json.refreshToken };
 }
 
 async function getAccountInfo(idToken: string) {
@@ -145,7 +125,6 @@ export async function signUpEmail(
     refreshToken: updated.refreshToken || j.refreshToken,
   };
 
-  await sendEmailVerification(user.idToken);
   storeUser(user);
 
   return user;

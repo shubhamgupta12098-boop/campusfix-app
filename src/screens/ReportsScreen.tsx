@@ -23,7 +23,7 @@ export function ReportsScreen() {
       supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').order('created_at', { ascending: false }),
       supabase.from('complaint_categories').select('*'),
       supabase.from('buildings').select('*'),
-      supabase.from('profiles').select('*').eq('role', 'technician'),
+      supabase.from('profiles').select('*').eq('role', 'staff'),
     ]);
     setComplaints((c.data || []) as unknown as Complaint[]);
     setCategories((cats.data || []) as ComplaintCategory[]);

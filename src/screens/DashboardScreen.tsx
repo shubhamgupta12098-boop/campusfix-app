@@ -20,8 +20,9 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
   const [stats, setStats] = useState({ total: 0, open: 0, resolved: 0, overdue: 0 });
 
   const role = profile?.role ?? 'student';
-  const isAdmin = role === 'admin' || role === 'supervisor';
-  const isTechnician = role === 'technician';
+  const isAdmin = role === 'admin';
+  const isStaff = role === 'staff';
+  const isStudent = role === 'student';
 
   useEffect(() => {
     void loadData();
@@ -42,7 +43,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (isTechnician) {
+    if (isStaff) {
       query = query.eq('assigned_to', profile?.id);
     } else if (!isAdmin) {
       query = query.eq('user_id', profile?.id);
@@ -76,9 +77,9 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
     <div className="max-w-7xl mx-auto">
       <PageHeader
         title={`Welcome, ${profile?.full_name?.split(' ')[0] || 'User'}`}
-        subtitle={isAdmin ? 'Overview of campus maintenance operations' : isTechnician ? 'Your assigned jobs and tasks' : 'Track your complaints and maintenance requests'}
+        subtitle={isAdmin ? 'Overview of campus maintenance operations' : isStaff ? 'Your assigned jobs and tasks' : 'Track your complaints and maintenance requests'}
         action={
-          (role === 'student' || role === 'faculty') && (
+          isStudent && (
             <button
               onClick={() => onNavigate('raise')}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-lg shadow-blue-600/20 transition-all"
@@ -104,7 +105,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900">Recent Complaints</h3>
-              {!isTechnician && !isAdmin && (
+              {!isStaff && !isAdmin && (
                 <button onClick={() => onNavigate('my-complaints')} className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
                   View all <ArrowRight className="w-3 h-3" />
                 </button>
@@ -186,7 +187,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
             </Card>
           )}
 
-          {isTechnician && (
+          {isStaff && (
             <Card className="p-5">
               <h3 className="font-bold text-slate-900 mb-3">My Workload</h3>
               <div className="space-y-3">

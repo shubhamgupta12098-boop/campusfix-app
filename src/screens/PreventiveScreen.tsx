@@ -32,7 +32,7 @@ export function PreventiveScreen() {
     const [s, b, t] = await Promise.all([
       supabase.from('preventive_maintenance_schedules').select('*, buildings(*)').order('next_due', { ascending: true }),
       supabase.from('buildings').select('*').order('name'),
-      supabase.from('profiles').select('*').eq('role', 'technician').eq('is_active', true),
+      supabase.from('profiles').select('*').eq('role', 'staff').eq('is_active', true),
     ]);
     setSchedules((s.data || []) as unknown as PreventiveSchedule[]);
     setBuildings(b.data || []);

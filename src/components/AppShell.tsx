@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
-import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, UserCircle, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle } from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
@@ -39,18 +39,18 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'faculty', 'technician', 'supervisor', 'admin'] },
-  { id: 'raise', label: 'Raise Complaint', icon: PlusCircle, roles: ['student', 'faculty'] },
-  { id: 'my-complaints', label: 'My Complaints', icon: ListChecks, roles: ['student', 'faculty'] },
-  { id: 'technician-jobs', label: 'My Jobs', icon: Wrench, roles: ['technician'] },
-  { id: 'assign', label: 'Assign Complaints', icon: ClipboardList, roles: ['supervisor', 'admin'] },
-  { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, roles: ['supervisor', 'admin', 'technician'] },
-  { id: 'inventory', label: 'Inventory', icon: Package, roles: ['supervisor', 'admin', 'technician'] },
-  { id: 'preventive', label: 'Preventive Maint.', icon: CalendarCheck, roles: ['supervisor', 'admin'] },
-  { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['supervisor', 'admin'] },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'staff', 'admin'] },
+  { id: 'raise', label: 'Raise Complaint', icon: PlusCircle, roles: ['student'] },
+  { id: 'my-complaints', label: 'My Complaints', icon: ListChecks, roles: ['student'] },
+  { id: 'technician-jobs', label: 'My Jobs', icon: Wrench, roles: ['staff'] },
+  { id: 'assign', label: 'Assign Complaints', icon: ClipboardList, roles: ['admin', 'staff'] },
+  { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, roles: ['admin', 'staff'] },
+  { id: 'inventory', label: 'Inventory', icon: Package, roles: ['admin', 'staff'] },
+  { id: 'preventive', label: 'Preventive Maint.', icon: CalendarCheck, roles: ['admin', 'staff'] },
+  { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'staff'] },
   { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
-  { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['student', 'faculty', 'technician', 'supervisor', 'admin'] },
-  { id: 'profile', label: 'My Profile', icon: UserCircle, roles: ['student', 'faculty', 'technician', 'supervisor', 'admin'] },
+  { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['student', 'staff', 'admin'] },
+  { id: 'profile', label: 'My Profile', icon: UserCircle, roles: ['student', 'staff', 'admin'] },
 ];
 
 export const AppShell = () => {
@@ -74,9 +74,7 @@ export const AppShell = () => {
 
   const roleLabel: Record<UserRole, string> = {
     student: 'Student',
-    faculty: 'Faculty / Staff',
-    technician: 'Cleaner / Technician',
-    supervisor: 'Supervisor',
+    staff: 'Staff',
     admin: 'Administrator',
   };
 
@@ -132,7 +130,7 @@ export const AppShell = () => {
         </nav>
 
         <div className="p-3 border-t border-slate-100">
-          <button onClick={() => navigate('profile')} className="w-full flex items-center gap-3 px-2 py-2 mb-2 rounded-lg hover:bg-slate-50 text-left">
+          <div className="flex items-center gap-3 px-2 py-2 mb-2">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-xs font-bold">
               {initials}
             </div>
@@ -140,7 +138,7 @@ export const AppShell = () => {
               <p className="text-sm font-semibold text-slate-900 truncate">{profile?.full_name}</p>
               <p className="text-xs text-slate-500 truncate">{profile?.college_id || ''}</p>
             </div>
-          </button>
+          </div>
           <button
             onClick={signOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all"

@@ -1,7 +1,9 @@
 // Firebase-backed compatibility layer using Firebase REST APIs.
+// Screens call `supabase.from('table').select()...` exactly like before;
+// under the hood every call is translated into a Firestore REST request.
 import { decodeDoc, encodeFields, firestoreFetch, toFirestoreValue } from '@/lib/firebase';
 
-export type UserRole = 'student' | 'faculty' | 'technician' | 'supervisor' | 'admin';
+export type UserRole = 'student' | 'staff' | 'admin';
 export type ComplaintStatus = 'submitted' | 'verified' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'rejected';
 export type ComplaintPriority = 'low' | 'medium' | 'high' | 'emergency';
 
@@ -20,7 +22,7 @@ type Result<T = any> = { data: T | null; error: { message: string } | null };
 const nowIso = () => new Date().toISOString();
 
 async function getOne(table: string, id?: string) { if (!id) return undefined; try { return decodeDoc(await firestoreFetch(`/${table}/${id}`)); } catch { return undefined; } }
-async function enrich(table: string, rows: any[]) { return Promise.all(rows.map(async r => { const row={...r}; if(table==='complaints'){row.complaint_categories=await getOne('complaint_categories',row.category_id);row.buildings=await getOne('buildings',row.building_id);row.profiles=await getOne('profiles',row.assigned_to);row.assigned_profile=row.profiles;} else if(table==='work_orders'){row.complaints=await getOne('complaints',row.complaint_id);row.profiles=await getOne('profiles',row.technician_id);} else if(table==='preventive_maintenance_schedules'){row.buildings=await getOne('buildings',row.building_id);} else if(table==='profiles'&&row.role==='technician'){row.technician=await getOne('technicians',row.id);} return row;})); }
+async function enrich(table: string, rows: any[]) { return Promise.all(rows.map(async r => { const row={...r}; if(table==='complaints'){row.complaint_categories=await getOne('complaint_categories',row.category_id);row.buildings=await getOne('buildings',row.building_id);row.profiles=await getOne('profiles',row.assigned_to);row.assigned_profile=row.profiles;} else if(table==='work_orders'){row.complaints=await getOne('complaints',row.complaint_id);row.profiles=await getOne('profiles',row.technician_id);} else if(table==='preventive_maintenance_schedules'){row.buildings=await getOne('buildings',row.building_id);} else if(table==='profiles'&&row.role==='staff'){row.technician=await getOne('technicians',row.id);} return row;})); }
 
 class FirebaseQueryBuilder {
  private action:'select'|'insert'|'update'|'delete'='select'; private payload:any=null; private filters:Filter[]=[]; private sort?:{field:string;ascending:boolean}; private max?:number; private one:'single'|'maybeSingle'|null=null;

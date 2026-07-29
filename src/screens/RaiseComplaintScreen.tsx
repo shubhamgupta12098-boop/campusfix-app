@@ -102,14 +102,14 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
         remarks: 'Complaint submitted',
       });
 
-      // Create notification for supervisors/admins
+      // Create notification for staff/admins
       const { data: admins } = await supabase
         .from('profiles')
         .select('id')
-        .in('role', ['supervisor', 'admin']);
+        .in('role', ['staff', 'admin']);
       if (admins && admins.length > 0) {
         await supabase.from('notifications').insert(
-          admins.map((a: any) => ({
+          admins.map((a: { id: string }) => ({
             user_id: a.id,
             title: 'New Complaint Submitted',
             message: `${title} — ${selectedCat?.name || 'General'}`,

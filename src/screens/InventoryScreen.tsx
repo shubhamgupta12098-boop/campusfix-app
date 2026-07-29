@@ -11,7 +11,7 @@ export function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const canEdit = profile?.role === 'admin' || profile?.role === 'supervisor';
+  const canEdit = profile?.role === 'admin' || profile?.role === 'staff';
 
   const [form, setForm] = useState({ name: '', category: '', unit: 'pcs', current_stock: 0, min_stock: 5, max_stock: 100, unit_cost: 0, supplier: '' });
 
