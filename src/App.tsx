@@ -1,15 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import { AuthScreen } from '@/screens/AuthScreen';
 import { AppShell } from '@/components/AppShell';
+import { isPasswordActionLink, ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 
 function App() {
   const { session, profile, loading } = useAuthStore();
+  const [showActionScreen, setShowActionScreen] = useState(isPasswordActionLink());
 
   useEffect(() => {
     // ensure dark scrollbars don't appear
     document.documentElement.classList.add('antialiased');
   }, []);
+
+  // The moment the user opens the email link (?mode=resetPassword / verifyEmail&oobCode=...)
+  // this takes over the whole screen so the reset form appears immediately.
+  if (showActionScreen) {
+    return <ResetPasswordScreen onDone={() => setShowActionScreen(false)} />;
+  }
 
   if (loading) {
     return (

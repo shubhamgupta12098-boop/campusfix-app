@@ -5,6 +5,14 @@
 2. Firestore Database > create database.
 3. Firestore > Rules: paste the contents of `firestore.rules` and publish.
 4. Authentication > Settings > Authorized domains: add your Render domain, for example `campusfix.onrender.com`.
+5. **Make the email links open inside CampusFix instead of Firebase's default page:**
+   - Go to Authentication > Templates.
+   - Open the **Password reset** template (and, separately, the **Email address verification** template).
+   - Click the pencil/edit icon next to the template, then click **Customize action URL** (bottom of the panel).
+   - Set it to your deployed app URL, e.g. `https://campusfix.onrender.com` (or `http://localhost:5173` while testing locally).
+   - Save. Do the same for the Email address verification template.
+
+   Once this is set, the emailed link becomes `https://campusfix.onrender.com/?mode=resetPassword&oobCode=...`. Opening it lands the user directly on CampusFix's own "Reset your password" screen (or "Email verified" screen), instead of Firebase's generic hosted page. This app already reads `mode`/`oobCode` from the URL and shows the right screen automatically — no further setup needed.
 
 The project already contains the Firebase web configuration in `.env`.
 
