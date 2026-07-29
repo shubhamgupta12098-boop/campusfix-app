@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
-import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, UserCircle, LogOut, Menu, X } from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
@@ -14,6 +14,7 @@ import { UserManagementScreen } from '@/screens/UserManagementScreen';
 import { TechnicianJobsScreen } from '@/screens/TechnicianJobsScreen';
 import { AssignComplaintsScreen } from '@/screens/AssignComplaintsScreen';
 import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
+import { ProfileScreen } from '@/screens/ProfileScreen';
 
 type Screen =
   | 'dashboard'
@@ -27,7 +28,8 @@ type Screen =
   | 'users'
   | 'technician-jobs'
   | 'assign'
-  | 'work-orders';
+  | 'work-orders'
+  | 'profile';
 
 interface NavItem {
   id: Screen;
@@ -48,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['supervisor', 'admin'] },
   { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['student', 'faculty', 'technician', 'supervisor', 'admin'] },
+  { id: 'profile', label: 'My Profile', icon: UserCircle, roles: ['student', 'faculty', 'technician', 'supervisor', 'admin'] },
 ];
 
 export const AppShell = () => {
@@ -72,7 +75,7 @@ export const AppShell = () => {
   const roleLabel: Record<UserRole, string> = {
     student: 'Student',
     faculty: 'Faculty / Staff',
-    technician: 'Technician',
+    technician: 'Cleaner / Technician',
     supervisor: 'Supervisor',
     admin: 'Administrator',
   };
@@ -129,7 +132,7 @@ export const AppShell = () => {
         </nav>
 
         <div className="p-3 border-t border-slate-100">
-          <div className="flex items-center gap-3 px-2 py-2 mb-2">
+          <button onClick={() => navigate('profile')} className="w-full flex items-center gap-3 px-2 py-2 mb-2 rounded-lg hover:bg-slate-50 text-left">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-xs font-bold">
               {initials}
             </div>
@@ -137,7 +140,7 @@ export const AppShell = () => {
               <p className="text-sm font-semibold text-slate-900 truncate">{profile?.full_name}</p>
               <p className="text-xs text-slate-500 truncate">{profile?.college_id || ''}</p>
             </div>
-          </div>
+          </button>
           <button
             onClick={signOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all"
@@ -183,6 +186,7 @@ export const AppShell = () => {
           {screen === 'technician-jobs' && <TechnicianJobsScreen onOpenComplaint={openComplaint} />}
           {screen === 'assign' && <AssignComplaintsScreen />}
           {screen === 'work-orders' && <WorkOrdersScreen />}
+          {screen === 'profile' && <ProfileScreen />}
         </main>
       </div>
     </div>

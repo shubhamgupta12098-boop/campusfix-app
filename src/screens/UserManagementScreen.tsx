@@ -36,6 +36,11 @@ export function UserManagementScreen() {
     setLoading(false);
   };
 
+  const changeRole = async (user: Profile, role: UserRole) => {
+    await supabase.from('profiles').update({ role, updated_at: new Date().toISOString() }).eq('id', user.id);
+    void load();
+  };
+
   const toggleActive = async (user: Profile) => {
     await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
     void load();
@@ -90,10 +95,20 @@ export function UserManagementScreen() {
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">{u.college_id || 'No ID'} {u.department && `· ${u.department}`} {u.hostel && `· ${u.hostel}`}</p>
                   </div>
-                  <Badge className={`bg-${color}-50 text-${color}-700 flex-shrink-0`}>
-                    <Icon className="w-3 h-3" />
-                    {u.role}
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Icon className="w-4 h-4 text-slate-400" />
+                    <select
+                      value={u.role}
+                      onChange={(e) => void changeRole(u, e.target.value as UserRole)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 outline-none focus:border-blue-400"
+                    >
+                      <option value="student">Student</option>
+                      <option value="faculty">Staff</option>
+                      <option value="technician">Cleaner / Technician</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
                   <button
                     onClick={() => toggleActive(u)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-colors ${u.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}

@@ -5,7 +5,7 @@ export type UserRole = 'student' | 'faculty' | 'technician' | 'supervisor' | 'ad
 export type ComplaintStatus = 'submitted' | 'verified' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'rejected';
 export type ComplaintPriority = 'low' | 'medium' | 'high' | 'emergency';
 
-export interface Profile { id: string; full_name: string; college_id?: string; role: UserRole; department?: string; hostel?: string; block?: string; room?: string; phone?: string; avatar_url?: string; is_active: boolean; created_at: string; updated_at: string; technician?: Technician; }
+export interface Profile { id: string; email?: string; full_name: string; college_id?: string; role: UserRole; department?: string; hostel?: string; block?: string; room?: string; phone?: string; avatar_url?: string; is_active: boolean; created_at: string; updated_at: string; technician?: Technician; }
 export interface Building { id: string; name: string; code?: string; type: string; floors: number; description?: string; }
 export interface ComplaintCategory { id: string; name: string; icon: string; color: string; description?: string; sla_hours: number; }
 export interface Complaint { id: string; complaint_no: string; title: string; description: string; category_id: string; user_id: string; building_id?: string; room_id?: string; floor?: number; location_description?: string; priority: ComplaintPriority; status: ComplaintStatus; photo_urls: string[]; assigned_to?: string; assigned_at?: string; resolved_at?: string; closed_at?: string; expected_completion?: string; escalation_level: number; feedback_rating?: number; feedback_comment?: string; created_at: string; updated_at: string; complaint_categories?: ComplaintCategory; buildings?: Building; profiles?: Profile; assigned_profile?: Profile; }

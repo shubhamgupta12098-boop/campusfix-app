@@ -109,7 +109,7 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
         .in('role', ['supervisor', 'admin']);
       if (admins && admins.length > 0) {
         await supabase.from('notifications').insert(
-          admins.map((a) => ({
+          admins.map((a: any) => ({
             user_id: a.id,
             title: 'New Complaint Submitted',
             message: `${title} — ${selectedCat?.name || 'General'}`,

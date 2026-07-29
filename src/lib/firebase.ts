@@ -11,6 +11,7 @@ export interface FirebaseUser {
   displayName?: string;
   idToken: string;
   refreshToken: string;
+  emailVerified?: boolean;
 }
 
 const STORAGE_KEY = 'campusfix_firebase_session';
@@ -54,6 +55,25 @@ async function authRequest(
   return json;
 }
 
+export async function sendEmailVerification(idToken: string): Promise<void> {
+  await authRequest('accounts:sendOobCode', {
+    requestType: 'VERIFY_EMAIL',
+    idToken,
+  });
+}
+
+export async function sendPasswordResetEmail(email: string): Promise<void> {
+  await authRequest('accounts:sendOobCode', {
+    requestType: 'PASSWORD_RESET',
+    email,
+  });
+}
+
+async function getAccountInfo(idToken: string) {
+  const result = await authRequest('accounts:lookup', { idToken });
+  return result?.users?.[0] || null;
+}
+
 export async function signInEmail(
   email: string,
   password: string
@@ -64,12 +84,14 @@ export async function signInEmail(
     returnSecureToken: true,
   });
 
+  const account = await getAccountInfo(j.idToken);
   const user: FirebaseUser = {
     uid: j.localId,
     email: j.email,
     displayName: j.displayName,
     idToken: j.idToken,
     refreshToken: j.refreshToken,
+    emailVerified: Boolean(account?.emailVerified),
   };
 
   storeUser(user);
@@ -102,20 +124,8 @@ export async function signUpEmail(
     refreshToken: updated.refreshToken || j.refreshToken,
   };
 
+  await sendEmailVerification(user.idToken);
   storeUser(user);
-
-  await firestoreFetch(`/profiles/${user.uid}`, {
-    method: 'PATCH',
-    body: JSON.stringify(
-      encodeFields({
-        uid: user.uid,
-        email: user.email,
-        full_name: displayName,
-        role: 'student',
-        created_at: new Date().toISOString(),
-      })
-    ),
-  });
 
   return user;
 }

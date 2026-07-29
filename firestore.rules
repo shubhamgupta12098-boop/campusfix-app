@@ -2,14 +2,23 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function ownProfile() { return signedIn() && request.auth.uid == resource.id; }
-    function roleIs(roles) {
-      return signedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role in roles;
+    function currentProfile() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
     }
+    function roleIs(roles) { return signedIn() && currentProfile().role in roles; }
+
     match /profiles/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role in ['student', 'faculty', 'technician']
+        && request.resource.data.is_active == true;
       allow read: if signedIn();
-      allow update: if request.auth.uid == userId || roleIs(['admin']);
+      allow update: if roleIs(['admin']) || (
+        signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.is_active == resource.data.is_active
+      );
     }
     match /complaints/{id} {
       allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
