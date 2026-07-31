@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
-import { GraduationCap, BadgeCheck, Wrench, Mail, Lock, User, Phone, Building2, Home, DoorOpen } from 'lucide-react';
+import { GraduationCap, BadgeCheck, Wrench, Mail, Lock, User, Phone, Building2, Home, DoorOpen, X, KeyRound, CheckCircle2 } from 'lucide-react';
 
 // Admin accounts are never offered on public signup — an existing admin
 // creates them from User Management instead.
@@ -11,7 +11,7 @@ const ROLES: { value: UserRole; label: string; icon: typeof GraduationCap; color
 ];
 
 export function AuthScreen() {
-  const { signIn, signUp, error, clearError } = useAuthStore();
+  const { signIn, signUp, sendPasswordResetLink, error, clearError } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +25,10 @@ export function AuthScreen() {
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotNotice, setForgotNotice] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +46,31 @@ export function AuthScreen() {
     setSubmitting(false);
   };
 
+  const openForgotPassword = () => {
+    clearError();
+    setForgotEmail(email.trim());
+    setForgotError('');
+    setForgotNotice('');
+    setForgotOpen(true);
+  };
+
+  const sendResetLink = async () => {
+    setForgotError('');
+    setForgotNotice('');
+    if (!forgotEmail.trim()) {
+      setForgotError('Registered email address enter karo.');
+      return;
+    }
+    setSubmitting(true);
+    const result = await sendPasswordResetLink(forgotEmail);
+    setSubmitting(false);
+    if (result.error) {
+      setForgotError(result.error);
+      return;
+    }
+    setForgotNotice('Password reset link email par bhej diya gaya hai. Inbox ke saath Spam/Junk folder bhi check karo.');
+  };
+
   const switchMode = () => {
     clearError();
     setNotice('');
@@ -56,12 +85,10 @@ export function AuthScreen() {
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(59,130,246,0.4) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(14,165,233,0.3) 0%, transparent 50%)' }} />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Wrench className="w-6 h-6 text-white" />
-            </div>
+            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-14 h-14 rounded-xl object-cover bg-white shadow-lg" />
             <div>
-              <h1 className="text-xl font-bold tracking-tight">CampusFix</h1>
-              <p className="text-xs text-slate-400">Maintenance Management</p>
+              <h1 className="text-xl font-bold tracking-tight">CMMS</h1>
+              <p className="text-xs text-slate-400">Campus Complaint Management</p>
             </div>
           </div>
 
@@ -96,17 +123,15 @@ export function AuthScreen() {
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <div className="w-full max-w-md py-8">
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-              <Wrench className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-lg font-bold text-slate-900">CampusFix</h1>
+            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-12 h-12 rounded-xl object-cover" />
+            <h1 className="text-lg font-bold text-slate-900">CMMS</h1>
           </div>
 
           <h2 className="text-2xl font-bold text-slate-900 mb-1">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-slate-500 text-sm mb-6">
-            {mode === 'login' ? 'Sign in to manage campus maintenance' : 'Join CampusFix to report and track issues'}
+            {mode === 'login' ? 'Sign in to manage campus maintenance' : 'Join CMMS to report and track issues'}
           </p>
 
           {error && (
@@ -196,6 +221,14 @@ export function AuthScreen() {
                 className="w-full bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400" />
             </Field>
 
+            {mode === 'login' && (
+              <div className="flex justify-end -mt-1">
+                <button type="button" onClick={openForgotPassword} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={submitting}
@@ -214,6 +247,29 @@ export function AuthScreen() {
           </p>
         </div>
       </div>
+
+      {forgotOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><KeyRound className="h-5 w-5" /></div>
+                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">Registered email par 30-minute password reset link bheja jayega.</p></div>
+              </div>
+              <button type="button" onClick={() => setForgotOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              {forgotError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{forgotError}</div>}
+              {forgotNotice && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800"><div className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" /><span>{forgotNotice}</span></div></div>}
+              <Field icon={Mail} label="Registered Email">
+                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@campus.edu" autoFocus className="w-full bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400" />
+              </Field>
+              <button type="button" onClick={sendResetLink} disabled={submitting} className="w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{submitting ? 'Sending link…' : 'Send Password Reset Link'}</button>
+              <p className="text-center text-xs text-slate-500">Email na mile to Spam/Junk folder check karein. SMTP server/.env mein configured hona chahiye.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

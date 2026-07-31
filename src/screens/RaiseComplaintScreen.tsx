@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { uploadDataUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card } from '@/components/ui';
 import { PRIORITY_CONFIG } from '@/lib/constants';
@@ -96,6 +97,15 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
       locationDesc.trim(),
     ].filter(Boolean).join(' | ');
 
+    let uploadedPhotos: string[] = [];
+    try {
+      uploadedPhotos = await Promise.all(photos.map((photo, index) => uploadDataUrl(photo, `complaint-${Date.now()}-${index}.jpg`)));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Complaint photos could not be uploaded.');
+      setSubmitting(false);
+      return;
+    }
+
     const result = await supabase.from('complaints').insert({
       complaint_no: complaintNo,
       title: title.trim(),
@@ -108,7 +118,7 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
       location_description: fullLocation,
       priority,
       status: 'submitted',
-      photo_urls: photos,
+      photo_urls: uploadedPhotos,
       escalation_level: 0,
       expected_completion: expectedCompletion.toISOString(),
     }).select('id').single();

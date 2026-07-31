@@ -2,15 +2,23 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import { AuthScreen } from '@/screens/AuthScreen';
 import { AppShell } from '@/components/AppShell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 
 function App() {
   const { session, profile, loading } = useAuthStore();
+  const resetToken = new URLSearchParams(window.location.search).get('resetToken');
 
   useEffect(() => {
     // ensure dark scrollbars don't appear
     document.documentElement.classList.add('antialiased');
+    document.documentElement.classList.toggle('dark', localStorage.getItem('cmms_dark_mode') === 'true');
   }, []);
 
+
+  if (resetToken) {
+    return <ResetPasswordScreen token={resetToken} onDone={() => { window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }} />;
+  }
 
   if (loading) {
     return (
@@ -24,10 +32,18 @@ function App() {
   }
 
   if (!session || !profile) {
-    return <AuthScreen />;
+    return (
+      <ErrorBoundary>
+        <AuthScreen />
+      </ErrorBoundary>
+    );
   }
 
-  return <AppShell />;
+  return (
+    <ErrorBoundary>
+      <AppShell />
+    </ErrorBoundary>
+  );
 }
 
 export default App;

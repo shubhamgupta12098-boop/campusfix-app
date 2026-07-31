@@ -1,17 +1,15 @@
-// Firebase-backed compatibility layer using Firebase REST APIs.
-// Screens call `supabase.from('table').select()...` exactly like before;
-// under the hood every call is translated into a Firestore REST request.
-import { decodeDoc, encodeFields, firestoreFetch, toFirestoreValue } from '@/lib/firebase';
+// MongoDB-backed compatibility layer. Existing screens keep the familiar query-builder API.
+import { api } from '@/lib/api';
 
 export type UserRole = 'student' | 'staff' | 'admin';
-export type ComplaintStatus = 'submitted' | 'verified' | 'assigned' | 'in_progress' | 'resolved' | 'closed' | 'rejected';
+export type ComplaintStatus = 'submitted' | 'verified' | 'assigned' | 'in_progress' | 'waiting_approval' | 'resolved' | 'closed' | 'rejected';
 export type ComplaintPriority = 'low' | 'medium' | 'high' | 'emergency';
 
 export interface Profile { id: string; email?: string; full_name: string; college_id?: string; role: UserRole; department?: string; hostel?: string; block?: string; room?: string; phone?: string; avatar_url?: string; is_active: boolean; created_at: string; updated_at: string; technician?: Technician; }
 export interface Building { id: string; name: string; code?: string; type: string; floors: number; description?: string; }
 export interface ComplaintCategory { id: string; name: string; icon: string; color: string; description?: string; sla_hours: number; }
-export interface Complaint { id: string; complaint_no: string; title: string; description: string; category_id: string; user_id: string; building_id?: string; room_id?: string; floor?: number; location_description?: string; priority: ComplaintPriority; status: ComplaintStatus; photo_urls: string[]; assigned_to?: string; assigned_at?: string; resolved_at?: string; closed_at?: string; expected_completion?: string; escalation_level: number; feedback_rating?: number; feedback_comment?: string; created_at: string; updated_at: string; complaint_categories?: ComplaintCategory; buildings?: Building; profiles?: Profile; assigned_profile?: Profile; }
-export interface WorkOrder { id: string; work_order_no: string; complaint_id: string; technician_id?: string; tools_required: string[]; materials_used: { name: string; quantity: number; cost: number }[]; start_time?: string; completion_time?: string; labour_hours?: number; repair_notes?: string; material_cost: number; status: string; completion_photo_urls: string[]; created_by: string; created_at: string; updated_at: string; complaints?: Complaint; profiles?: Profile; }
+export interface Complaint { id: string; complaint_no: string; title: string; description: string; category_id: string; user_id: string; building_id?: string; room_id?: string; floor?: number; location_description?: string; priority: ComplaintPriority; status: ComplaintStatus; photo_urls: string[]; assigned_to?: string; assigned_at?: string; resolved_at?: string; closed_at?: string; expected_completion?: string; escalation_level: number; feedback_rating?: number; feedback_comment?: string; feedback_submitted_at?: string; feedback_by?: string; created_at: string; updated_at: string; complaint_categories?: ComplaintCategory; buildings?: Building; profiles?: Profile; assigned_profile?: Profile; }
+export interface WorkOrder { id: string; work_order_no: string; complaint_id: string; technician_id?: string; tools_required: string[]; materials_used: { name: string; quantity: number; cost: number }[]; start_time?: string; completion_time?: string; labour_hours?: number; repair_notes?: string; material_cost: number; status: string; before_photo_urls?: string[]; completion_photo_urls: string[]; approval_status?: 'pending'|'approved'|'rejected'; approval_remarks?: string; approved_by?: string; approved_at?: string; created_by: string; created_at: string; updated_at: string; complaints?: Complaint; profiles?: Profile; }
 export interface InventoryItem { id: string; name: string; category: string; unit: string; current_stock: number; min_stock: number; max_stock: number; unit_cost: number; supplier?: string; description?: string; }
 export interface PreventiveSchedule { id: string; title: string; description?: string; category: string; building_id?: string; frequency_days: number; last_performed?: string; next_due?: string; assigned_to?: string; status: string; buildings?: Building; }
 export interface Technician { id: string; employee_code?: string; skills: string[]; current_workload: number; availability_status: string; area_coverage: string[]; }
@@ -19,46 +17,51 @@ export interface Notification { id: string; user_id: string; title: string; mess
 
 type Filter = { field: string; op: 'eq' | 'in'; value: unknown };
 type Result<T = any> = { data: T | null; error: { message: string } | null };
-const nowIso = () => new Date().toISOString();
 
-async function getOne(table: string, id?: string) { if (!id) return undefined; try { return decodeDoc(await firestoreFetch(`/${table}/${id}`)); } catch { return undefined; } }
-async function enrich(table: string, rows: any[]) { return Promise.all(rows.map(async r => { const row={...r}; if(table==='complaints'){row.complaint_categories=await getOne('complaint_categories',row.category_id);row.buildings=await getOne('buildings',row.building_id);row.profiles=await getOne('profiles',row.assigned_to);row.assigned_profile=row.profiles;} else if(table==='work_orders'){row.complaints=await getOne('complaints',row.complaint_id);row.profiles=await getOne('profiles',row.technician_id);} else if(table==='preventive_maintenance_schedules'){row.buildings=await getOne('buildings',row.building_id);} else if(table==='profiles'&&row.role==='staff'){row.technician=await getOne('technicians',row.id);} return row;})); }
-
-class FirebaseQueryBuilder {
- private action:'select'|'insert'|'update'|'delete'='select'; private payload:any=null; private filters:Filter[]=[]; private sort?:{field:string;ascending:boolean}; private max?:number; private one:'single'|'maybeSingle'|null=null;
- constructor(private table:string){} select(_='*'){if(this.action==='select')this.action='select';return this;} insert(v:any){this.action='insert';this.payload=v;return this;} update(v:any){this.action='update';this.payload=v;return this;} delete(){this.action='delete';return this;} eq(field:string,value:unknown){this.filters.push({field,op:'eq',value});return this;} in(field:string,value:unknown[]){this.filters.push({field,op:'in',value});return this;} order(field:string,o?:{ascending?:boolean}){this.sort={field,ascending:o?.ascending!==false};return this;} limit(v:number){this.max=v;return this;} single(){this.one='single';return this;} maybeSingle(){this.one='maybeSingle';return this;}
- then<TResult1=Result,TResult2=never>(ok?:((v:Result)=>TResult1|PromiseLike<TResult1>)|null,bad?:((r:any)=>TResult2|PromiseLike<TResult2>)|null){return this.execute().then(ok,bad);}
- private structuredQuery(){const sq:any={from:[{collectionId:this.table}]}; const fs=this.filters.map(f=>({fieldFilter:{field:{fieldPath:f.field},op:f.op==='eq'?'EQUAL':'IN',value:f.op==='in'?{arrayValue:{values:(f.value as any[]).map(toFirestoreValue)}}:toFirestoreValue(f.value)}})); if(fs.length===1)sq.where=fs[0];else if(fs.length>1)sq.where={compositeFilter:{op:'AND',filters:fs}};if(this.sort)sq.orderBy=[{field:{fieldPath:this.sort.field},direction:this.sort.ascending?'ASCENDING':'DESCENDING'}];if(this.max)sq.limit=this.max;return {structuredQuery:sq};}
- private async list(){
-  // Use Firestore's document-list endpoint and apply the small app's filters
-  // client-side. This avoids composite-index failures on Android/WebView (for
-  // example: user_id equality + created_at ordering), which previously made a
-  // successfully filed complaint look as if it had disappeared.
-  const response = await firestoreFetch(`/${this.table}?pageSize=1000`, { method: 'GET' });
-  let rows = ((response as any)?.documents || []).map((document: any) => decodeDoc(document));
-
-  rows = rows.filter((row: any) => this.filters.every((filter) => {
-    if (filter.op === 'eq') return row[filter.field] === filter.value;
-    return Array.isArray(filter.value) && filter.value.includes(row[filter.field]);
-  }));
-
-  if (this.sort) {
-    const { field, ascending } = this.sort;
-    rows.sort((a: any, b: any) => {
-      const av = a[field] ?? '';
-      const bv = b[field] ?? '';
-      const result = typeof av === 'number' && typeof bv === 'number'
-        ? av - bv
-        : String(av).localeCompare(String(bv));
-      return ascending ? result : -result;
-    });
+class MongoQueryBuilder {
+  private action: 'select' | 'insert' | 'update' | 'delete' = 'select';
+  private payload: any = null;
+  private filters: Filter[] = [];
+  private sort?: { field: string; ascending: boolean };
+  private max?: number;
+  private one: 'single' | 'maybeSingle' | null = null;
+  constructor(private table: string) {}
+  select(_columns = '*') { return this; }
+  insert(value: any) { this.action = 'insert'; this.payload = value; return this; }
+  update(value: any) { this.action = 'update'; this.payload = value; return this; }
+  delete() { this.action = 'delete'; return this; }
+  eq(field: string, value: unknown) { this.filters.push({ field, op: 'eq', value }); return this; }
+  in(field: string, value: unknown[]) { this.filters.push({ field, op: 'in', value }); return this; }
+  order(field: string, options?: { ascending?: boolean }) { this.sort = { field, ascending: options?.ascending !== false }; return this; }
+  limit(value: number) { this.max = value; return this; }
+  single() { this.one = 'single'; return this; }
+  maybeSingle() { this.one = 'maybeSingle'; return this; }
+  then<TResult1 = Result, TResult2 = never>(ok?: ((v: Result) => TResult1 | PromiseLike<TResult1>) | null, bad?: ((r: any) => TResult2 | PromiseLike<TResult2>) | null) { return this.execute().then(ok, bad); }
+  private async execute(): Promise<Result> {
+    try {
+      if (this.action === 'insert') {
+        const data = await api(`/data/${this.table}`, { method: 'POST', body: JSON.stringify(this.payload) });
+        const normalized = Array.isArray(data) ? data : [data];
+        return { data: this.one ? normalized[0] ?? null : data, error: null };
+      }
+      if (this.action === 'update' || this.action === 'delete') {
+        const data = await api(`/data/${this.table}`, {
+          method: this.action === 'update' ? 'PATCH' : 'DELETE',
+          body: JSON.stringify(this.action === 'update' ? { filters: this.filters, values: this.payload } : { filters: this.filters }),
+        });
+        return { data, error: null };
+      }
+      const params = new URLSearchParams();
+      if (this.filters.length) params.set('filters', JSON.stringify(this.filters));
+      if (this.sort) { params.set('sort', this.sort.field); params.set('ascending', String(this.sort.ascending)); }
+      if (this.max) params.set('limit', String(this.max));
+      const rows = await api<any[]>(`/data/${this.table}?${params}`);
+      if (this.one === 'single' && rows.length !== 1) return { data: null, error: { message: `Expected one ${this.table} record, found ${rows.length}.` } };
+      return { data: this.one ? rows[0] ?? null : rows, error: null };
+    } catch (error) {
+      return { data: null, error: { message: error instanceof Error ? error.message : String(error) } };
+    }
   }
-
-  if (this.max) rows = rows.slice(0, this.max);
-  return rows;
- }
- private async execute():Promise<Result>{try{if(this.action==='insert'){const values=Array.isArray(this.payload)?this.payload:[this.payload];const made=[];for(const raw of values){const value={created_at:nowIso(),updated_at:nowIso(),...raw};let id=value.id as string|undefined;delete value.id;if(id){const d=await firestoreFetch(`/${this.table}/${id}`,{method:'PATCH',body:JSON.stringify(encodeFields(value))});made.push(decodeDoc(d));}else{const d=await firestoreFetch(`/${this.table}`,{method:'POST',body:JSON.stringify(encodeFields(value))});made.push(decodeDoc(d));}}const data=await enrich(this.table,made);return{data:this.one?data[0]??null:data,error:null};}
- const rows=await this.list();if(this.action==='update'||this.action==='delete'){for(const r of rows){if(this.action==='delete')await firestoreFetch(`/${this.table}/${r.id}`,{method:'DELETE'});else await firestoreFetch(`/${this.table}/${r.id}`,{method:'PATCH',body:JSON.stringify(encodeFields({...this.payload,updated_at:nowIso()}))});}return{data:null,error:null};}
- const data=await enrich(this.table,rows);if(this.one==='single'&&data.length!==1)return{data:null,error:{message:`Expected one ${this.table} record, found ${data.length}.`}};return{data:this.one?data[0]??null:data,error:null};}catch(e){return{data:null,error:{message:e instanceof Error?e.message:String(e)}};}}
 }
-export const supabase={from(table:string){return new FirebaseQueryBuilder(table);}};
+
+export const supabase = { from(table: string) { return new MongoQueryBuilder(table); } };

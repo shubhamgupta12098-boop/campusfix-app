@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
-import { LayoutDashboard, PlusCircle, ListChecks, Bell, Package, CalendarCheck, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ListChecks, Bell, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle, Star } from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
-import { AdminDashboardScreen } from '@/screens/AdminDashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
 import { ComplaintDetailScreen } from '@/screens/ComplaintDetailScreen';
 import { NotificationsScreen } from '@/screens/NotificationsScreen';
-import { InventoryScreen } from '@/screens/InventoryScreen';
-import { PreventiveScreen } from '@/screens/PreventiveScreen';
 import { ReportsScreen } from '@/screens/ReportsScreen';
 import { UserManagementScreen } from '@/screens/UserManagementScreen';
 import { TechnicianJobsScreen } from '@/screens/TechnicianJobsScreen';
 import { AssignComplaintsScreen } from '@/screens/AssignComplaintsScreen';
 import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
+import { FeedbackScreen } from '@/screens/FeedbackScreen';
+import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { supabase } from '@/lib/supabase';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 type Screen =
   | 'dashboard'
@@ -24,14 +24,14 @@ type Screen =
   | 'my-complaints'
   | 'complaint-detail'
   | 'notifications'
-  | 'inventory'
-  | 'preventive'
   | 'reports'
   | 'users'
   | 'technician-jobs'
   | 'assign'
   | 'work-orders'
-  | 'profile';
+  | 'profile'
+  | 'approvals'
+  | 'feedback';
 
 interface NavItem {
   id: Screen;
@@ -44,12 +44,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'staff', 'admin'] },
   { id: 'raise', label: 'Raise Complaint', icon: PlusCircle, roles: ['student'] },
   { id: 'my-complaints', label: 'My Complaints', icon: ListChecks, roles: ['student'] },
+  { id: 'feedback', label: 'Feedback & Ratings', icon: Star, roles: ['student', 'admin'] },
   { id: 'technician-jobs', label: 'My Jobs', icon: Wrench, roles: ['staff'] },
-  { id: 'assign', label: 'Assign Complaints', icon: ClipboardList, roles: ['admin', 'staff'] },
-  { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, roles: ['admin', 'staff'] },
-  { id: 'inventory', label: 'Inventory', icon: Package, roles: ['admin', 'staff'] },
-  { id: 'preventive', label: 'Preventive Maint.', icon: CalendarCheck, roles: ['admin', 'staff'] },
+  { id: 'assign', label: 'Assign Complaints', icon: ClipboardList, roles: ['admin'] },
+  { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, roles: ['admin'] },
   { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'staff'] },
+  { id: 'approvals', label: 'Work Approvals', icon: Settings, roles: ['admin'] },
   { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['student', 'staff', 'admin'] },
   { id: 'profile', label: 'My Profile', icon: UserCircle, roles: ['student', 'staff', 'admin'] },
@@ -110,11 +110,9 @@ export const AppShell = () => {
       >
         <div className="flex items-center justify-between px-5 h-16 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-md shadow-blue-600/20">
-              <Wrench className="w-5 h-5 text-white" />
-            </div>
+            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shadow-sm" />
             <div>
-              <h1 className="text-base font-bold text-slate-900 leading-none">CampusFix</h1>
+              <h1 className="text-base font-bold text-slate-900 leading-none">CMMS</h1>
               <p className="text-[10px] text-slate-500 mt-0.5">{roleLabel[role]} Portal</p>
             </div>
           </div>
@@ -175,10 +173,8 @@ export const AppShell = () => {
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-              <Wrench className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-slate-900">CampusFix</span>
+            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-8 h-8 rounded-md object-cover" />
+            <span className="font-bold text-slate-900">CMMS</span>
           </div>
           <button onClick={() => navigate('notifications')} className="relative text-slate-600 p-1">
             <Bell className="w-5 h-5" />
@@ -187,21 +183,26 @@ export const AppShell = () => {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-          {screen === 'dashboard' && (role === 'admin' ? <AdminDashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} /> : <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} />)}
-          {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')} />}
-          {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint} />}
-          {screen === 'complaint-detail' && selectedComplaintId && (
-            <ComplaintDetailScreen complaintId={selectedComplaintId} onBack={() => navigate('my-complaints')} />
-          )}
-          {screen === 'notifications' && <NotificationsScreen />}
-          {screen === 'inventory' && <InventoryScreen />}
-          {screen === 'preventive' && <PreventiveScreen />}
-          {screen === 'reports' && <ReportsScreen />}
-          {screen === 'users' && <UserManagementScreen />}
-          {screen === 'technician-jobs' && <TechnicianJobsScreen onOpenComplaint={openComplaint} />}
-          {screen === 'assign' && <AssignComplaintsScreen />}
-          {screen === 'work-orders' && <WorkOrdersScreen />}
-          {screen === 'profile' && <ProfileScreen />}
+          {/* resetKey=screen: if a screen crashes, switching to another nav
+              item clears the error automatically instead of staying stuck. */}
+          <ErrorBoundary resetKey={screen}>
+            {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} />}
+            {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')} />}
+            {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint} />}
+            {screen === 'complaint-detail' && selectedComplaintId && (
+              <ComplaintDetailScreen complaintId={selectedComplaintId} onBack={() => navigate(role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign')} />
+            )}
+            {screen === 'notifications' && <NotificationsScreen onOpenComplaint={openComplaint} />}
+
+            {screen === 'reports' && <ReportsScreen />}
+            {screen === 'users' && <UserManagementScreen />}
+            {screen === 'technician-jobs' && <TechnicianJobsScreen onOpenComplaint={openComplaint} />}
+            {screen === 'assign' && <AssignComplaintsScreen onOpenComplaint={openComplaint} />}
+            {screen === 'work-orders' && <WorkOrdersScreen onOpenComplaint={openComplaint} />}
+            {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint} />}
+            {screen === 'profile' && <ProfileScreen />}
+            {screen === 'feedback' && <FeedbackScreen onOpenComplaint={openComplaint} />}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -16,7 +16,7 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   info: Bell,
 };
 
-export function NotificationsScreen() {
+export function NotificationsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
   const { profile } = useAuthStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +41,14 @@ export function NotificationsScreen() {
     void load();
   };
 
-  const markRead = async (id: string) => {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+  const openNotification = async (notification: Notification) => {
+    if (!notification.is_read) {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+    }
+    if (notification.related_id) {
+      onOpenComplaint(notification.related_id);
+      return;
+    }
     void load();
   };
 
@@ -76,7 +82,7 @@ export function NotificationsScreen() {
             return (
               <button
                 key={n.id}
-                onClick={() => markRead(n.id)}
+                onClick={() => void openNotification(n)}
                 className={`w-full text-left ${!n.is_read ? 'bg-blue-50/50' : ''}`}
               >
                 <Card className={`p-4 ${!n.is_read ? 'border-blue-200' : ''} hover:shadow-sm transition-shadow`}>
@@ -90,7 +96,7 @@ export function NotificationsScreen() {
                         {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
                       </div>
                       <p className="text-sm text-slate-600 mt-0.5">{n.message}</p>
-                      <p className="text-xs text-slate-400 mt-1.5">{timeAgo(n.created_at)}</p>
+                      <div className="flex items-center justify-between gap-3 mt-1.5"><p className="text-xs text-slate-400">{timeAgo(n.created_at)}</p>{n.related_id && <span className="text-xs font-semibold text-blue-600">View complaint →</span>}</div>
                     </div>
                   </div>
                 </Card>

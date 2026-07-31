@@ -3,8 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, STATUS_FLOW, PRIORITY_CONFIG, formatDate, timeAgo } from '@/lib/constants';
-import type { Complaint, ComplaintStatus } from '@/lib/supabase';
-import { ArrowLeft, MapPin, User, Wrench, Clock, Star, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react';
+import type { Complaint, ComplaintStatus, WorkOrder } from '@/lib/supabase';
+import { ArrowLeft, MapPin, User, Wrench, Clock, Star, MessageSquare, CheckCircle2, AlertCircle, LockKeyhole } from 'lucide-react';
 
 interface StatusHistoryEntry {
   id: string;
@@ -25,9 +25,14 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [closeMessage, setCloseMessage] = useState('');
 
   const role = profile?.role ?? 'student';
-  const canFeedback = (complaint?.status === 'resolved' || complaint?.status === 'closed') && complaint?.user_id === profile?.id && !complaint?.feedback_rating;
+  const canFeedback = role === 'student' && (complaint?.status === 'resolved' || complaint?.status === 'closed') && complaint?.user_id === profile?.id && !complaint?.feedback_rating;
 
   useEffect(() => {
     void load();
@@ -35,11 +40,18 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
+    setLoadError('');
+    const { data, error } = await supabase
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
       .eq('id', complaintId)
       .maybeSingle();
+    if (error) {
+      setComplaint(null);
+      setLoadError(error.message);
+      setLoading(false);
+      return;
+    }
     setComplaint(data as unknown as Complaint);
 
     const { data: histData } = await supabase
@@ -56,30 +68,97 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
       changed_by_name: h.profiles?.full_name || 'System',
     }));
     setHistory(hist);
+
+    const { data: workOrders } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('complaint_id', complaintId)
+      .order('created_at', { ascending: false });
+    setWorkOrder(((workOrders || [])[0] as unknown as WorkOrder) || null);
     setLoading(false);
   };
 
+
+  const canClose = !!complaint && complaint.status !== 'closed' && (
+    (role === 'admin' && ['waiting_approval', 'resolved'].includes(complaint.status)) ||
+    (role === 'student' && complaint.status === 'resolved' && complaint.user_id === profile?.id)
+  );
+
+  const closeComplaint = async () => {
+    if (!complaint || !profile?.id || !canClose) return;
+    if (!window.confirm('Is complaint ko permanently close karna hai?')) return;
+    setClosing(true);
+    setCloseMessage('');
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('complaints').update({
+      status: 'closed',
+      closed_at: now,
+      updated_at: now,
+    }).eq('id', complaint.id);
+    if (!error) {
+      await supabase.from('complaint_status_history').insert({
+        complaint_id: complaint.id,
+        old_status: complaint.status,
+        new_status: 'closed',
+        changed_by: profile.id,
+        changed_by_name: profile.full_name,
+        remarks: role === 'admin' ? 'Complaint closed by administrator.' : 'Complaint closed by student.',
+      });
+      await supabase.from('notifications').insert({
+        user_id: complaint.user_id,
+        title: 'Complaint Closed',
+        message: `${complaint.title} has been closed.`,
+        type: 'closed',
+        related_id: complaint.id,
+      });
+    }
+    setClosing(false);
+    if (error) setCloseMessage(error.message || 'Complaint close nahi hui.');
+    else { setCloseMessage('Complaint successfully closed.'); await load(); }
+  };
+
   const submitFeedback = async () => {
-    if (rating < 1) return;
+    if (rating < 1 || !profile?.id || complaint?.user_id !== profile.id) return;
     setSubmittingFeedback(true);
-    await supabase
+    setFeedbackMessage('');
+    const submittedAt = new Date().toISOString();
+    const { error } = await supabase
       .from('complaints')
-      .update({ feedback_rating: rating, feedback_comment: comment })
+      .update({
+        feedback_rating: rating,
+        feedback_comment: comment.trim(),
+        feedback_submitted_at: submittedAt,
+        feedback_by: profile.id,
+      })
       .eq('id', complaintId);
     setSubmittingFeedback(false);
+    if (error) {
+      setFeedbackMessage(error.message || 'Feedback submit nahi hua. Dobara try karo.');
+      return;
+    }
     setFeedbackOpen(false);
+    setFeedbackMessage('Thank you! Aapki rating aur feedback save ho gaya.');
     void load();
   };
 
   if (loading) return <Spinner />;
 
   if (!complaint) {
-    return <EmptyState icon={AlertCircle} title="Complaint not found" />;
+    return (
+      <div className="max-w-3xl mx-auto">
+        <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 font-medium"><ArrowLeft className="w-4 h-4" />Back</button>
+        <Card className="p-6 border border-red-200 bg-red-50">
+          <EmptyState icon={AlertCircle} title="Complaint detail could not be loaded" description={loadError || 'Complaint not found or it has been removed.'} />
+          <button onClick={() => void load()} className="mx-auto mt-3 block px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold">Retry</button>
+        </Card>
+      </div>
+    );
   }
 
-  const sc = STATUS_CONFIG[complaint.status];
+  const displayStatus: ComplaintStatus = complaint.status === 'resolved' ? 'closed' : complaint.status;
+  const sc = STATUS_CONFIG[displayStatus];
   const pc = PRIORITY_CONFIG[complaint.priority];
-  const currentStepIndex = STATUS_FLOW.indexOf(complaint.status);
+  const currentStepIndex = STATUS_FLOW.indexOf(displayStatus);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -135,6 +214,18 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
         </div>
       </Card>
 
+      {(canClose || complaint.status === 'closed' || closeMessage) && (
+        <Card className={`p-4 mb-5 border ${complaint.status === 'closed' ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-slate-900">{complaint.status === 'closed' ? 'This complaint is closed.' : 'Final complaint closure'}</p>
+              <p className="text-xs text-slate-600 mt-1">{closeMessage || (role === 'admin' ? 'Work verify karke complaint ko final close karein.' : 'Kaam check karne ke baad complaint close karein.')}</p>
+            </div>
+            {canClose && <button disabled={closing} onClick={() => void closeComplaint()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"><LockKeyhole className="w-4 h-4" />{closing ? 'Closing…' : 'Close Complaint'}</button>}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left - details */}
         <div className="lg:col-span-2 space-y-5">
@@ -145,7 +236,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
 
           {complaint.photo_urls && complaint.photo_urls.length > 0 && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Photos</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Student Complaint Photos</h3><p className="text-xs text-slate-500 mb-3">Student ne complaint ke saath ye photos upload ki hain.</p>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {complaint.photo_urls.map((url, idx) => (
                   <div key={idx} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
@@ -153,6 +244,60 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                   </div>
                 ))}
               </div>
+            </Card>
+          )}
+
+          {workOrder && (complaint.status === 'in_progress' || complaint.status === 'resolved' || complaint.status === 'closed' || complaint.status === 'waiting_approval') && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Staff Work Evidence</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {complaint.status === 'in_progress'
+                      ? 'Work is currently in progress — before-repair photo captured so far.'
+                      : 'Staff ne kaam kaise kiya, uski before/after photos aur remarks.'}
+                  </p>
+                </div>
+                {workOrder.profiles?.full_name && <Badge className="bg-blue-50 text-blue-700">{workOrder.profiles.full_name}</Badge>}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Before Repair</p>
+                  {(workOrder.before_photo_urls || []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-xs text-slate-400">Before photo not provided</div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(workOrder.before_photo_urls || []).map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl border border-slate-200">
+                          <img src={url} alt={`Before repair ${idx + 1}`} className="h-full w-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-2">After Repair</p>
+                  {(workOrder.completion_photo_urls || []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-xs text-slate-400">
+                      {complaint.status === 'in_progress' ? 'Not uploaded yet — job still in progress.' : 'After photo not provided'}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(workOrder.completion_photo_urls || []).map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl border border-slate-200">
+                          <img src={url} alt={`After repair ${idx + 1}`} className="h-full w-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {workOrder.repair_notes && (
+                <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold text-slate-600">Staff Completion Remarks</p>
+                  <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{workOrder.repair_notes}</p>
+                </div>
+              )}
             </Card>
           )}
 
@@ -185,10 +330,16 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
             )}
           </Card>
 
+          {feedbackMessage && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${feedbackMessage.startsWith('Thank') ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              {feedbackMessage}
+            </div>
+          )}
+
           {/* Feedback */}
           {complaint.feedback_rating && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Your Feedback</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-3">{role === 'student' ? 'Your Feedback' : 'Student Feedback'}</h3>
               <div className="flex items-center gap-1 mb-2">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <Star key={n} className={`w-5 h-5 ${n <= complaint.feedback_rating! ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
@@ -203,8 +354,8 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
               <div className="flex items-center gap-3">
                 <Star className="w-5 h-5 text-amber-500" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">How was the resolution?</p>
-                  <p className="text-xs text-slate-600">Rate your experience to help us improve.</p>
+                  <p className="text-sm font-semibold text-slate-900">Staff ne kaam kaisa kiya?</p>
+                  <p className="text-xs text-slate-600">Before/after photos aur completed work dekhkar 1–5 star rating aur feedback dein.</p>
                 </div>
                 <button onClick={() => setFeedbackOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors">
                   Rate Now
@@ -215,7 +366,8 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
 
           {feedbackOpen && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Leave Feedback</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Rate Staff Work</h3>
+              <p className="mb-3 text-xs text-slate-500">1 star = poor, 5 stars = excellent</p>
               <div className="flex items-center gap-1 mb-4">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
@@ -232,7 +384,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
-                placeholder="Share your experience…"
+                placeholder="Staff ke kaam, quality aur behaviour ke baare mein feedback likhein…"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 resize-none mb-3"
               />
               <div className="flex gap-2">
@@ -263,7 +415,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
               {complaint.location_description && <DetailRow icon={MapPin} label="Room" value={complaint.location_description} />}
               <DetailRow icon={Clock} label="Submitted" value={formatDate(complaint.created_at)} />
               {complaint.expected_completion && <DetailRow icon={Clock} label="Expected by" value={formatDate(complaint.expected_completion)} />}
-              {complaint.resolved_at && <DetailRow icon={CheckCircle2} label="Resolved" value={formatDate(complaint.resolved_at)} />}
+              {complaint.resolved_at && <DetailRow icon={CheckCircle2} label="Completed" value={formatDate(complaint.resolved_at)} />}
             </div>
           </Card>
 

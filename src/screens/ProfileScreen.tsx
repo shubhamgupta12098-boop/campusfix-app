@@ -7,7 +7,7 @@ import type { Complaint, UserRole } from '@/lib/supabase';
 import {
   User, Mail, Phone, Building2, Home, DoorOpen, BadgeCheck, Shield,
   Edit3, X, Save, ClipboardList, CheckCircle2, Clock, Star, Wrench,
-  TrendingUp, Calendar, Award, Activity, KeyRound, Lock, Eye, EyeOff,
+  TrendingUp, Calendar, Award, Activity, KeyRound, Lock, Eye, EyeOff, Moon, Sun,
 } from 'lucide-react';
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -23,19 +23,24 @@ const ROLE_COLORS: Record<UserRole, { bg: string; text: string; gradient: string
 };
 
 export function ProfileScreen() {
-  const { profile, user, refreshProfile, signOut, changePassword } = useAuthStore();
+  const { profile, user, refreshProfile, signOut, changePassword, changeEmail } = useAuthStore();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', new: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('cmms_dark_mode') === 'true');
   const [form, setForm] = useState({
     full_name: profile?.full_name || '',
+    email: user?.email || profile?.email || '',
+    current_password: '',
     college_id: profile?.college_id || '',
     department: profile?.department || '',
     hostel: profile?.hostel || '',
@@ -47,6 +52,11 @@ export function ProfileScreen() {
   useEffect(() => {
     void loadComplaints();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('cmms_dark_mode', String(darkMode));
+  }, [darkMode]);
 
   const loadComplaints = async () => {
     const { data } = await supabase
@@ -60,11 +70,50 @@ export function ProfileScreen() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
+    setSaveSuccess(false);
     setSaving(true);
-    await supabase.from('profiles').update(form).eq('id', profile?.id);
-    await refreshProfile();
-    setSaving(false);
-    setEditing(false);
+
+    try {
+      const emailChanged = role === 'student' && form.email.trim().toLowerCase() !== (user?.email || '').toLowerCase();
+      if (emailChanged) {
+        if (!form.current_password) {
+          setSaveError('Current password is required to change your email.');
+          setSaving(false);
+          return;
+        }
+        const { error } = await changeEmail(form.current_password, form.email);
+        if (error) {
+          setSaveError(error);
+          setSaving(false);
+          return;
+        }
+      }
+
+      const profileUpdates = {
+        full_name: form.full_name,
+        college_id: form.college_id,
+        department: form.department,
+        hostel: form.hostel,
+        block: form.block,
+        room: form.room,
+        phone: form.phone,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('profiles').update(profileUpdates).eq('id', profile?.id);
+      if (error) throw error;
+      await refreshProfile();
+      setSaveSuccess(true);
+      setForm((current) => ({ ...current, current_password: '', email: form.email.trim().toLowerCase() }));
+      setTimeout(() => {
+        setEditing(false);
+        setSaveSuccess(false);
+      }, 900);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -121,7 +170,7 @@ export function ProfileScreen() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <PageHeader title="My Profile" subtitle="Manage your account and view your activity" />
+      <div className="flex items-start justify-between gap-4"><PageHeader title="My Profile" subtitle="Manage your account and view your activity" /><button onClick={() => setDarkMode(v => !v)} className="mt-1 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">{darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}{darkMode ? 'Light Mode' : 'Dark Mode'}</button></div>
 
       {/* Profile header card */}
       <Card className="overflow-hidden mb-6">
@@ -147,7 +196,7 @@ export function ProfileScreen() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-              <button onClick={() => setEditing(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+              <button onClick={() => { setSaveError(null); setForm({ full_name: profile?.full_name || '', email: user?.email || profile?.email || '', current_password: '', college_id: profile?.college_id || '', department: profile?.department || '', hostel: profile?.hostel || '', block: profile?.block || '', room: profile?.room || '', phone: profile?.phone || '' }); setEditing(true); }} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
                 <Edit3 className="w-4 h-4" /> Edit Profile
               </button>
               <button onClick={() => setPwOpen(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
@@ -162,7 +211,7 @@ export function ProfileScreen() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MiniStat icon={ClipboardList} label="Total Complaints" value={total} color="blue" />
         <MiniStat icon={Clock} label="Open" value={open} color="amber" />
-        <MiniStat icon={CheckCircle2} label="Resolved" value={resolved} color="emerald" />
+        <MiniStat icon={CheckCircle2} label="Closed" value={resolved} color="emerald" />
         <MiniStat icon={Star} label="Avg Rating" value={avgRating || '—'} color="violet" />
       </div>
 
@@ -232,7 +281,7 @@ export function ProfileScreen() {
           <Card className="p-5 mt-6">
             <h3 className="font-bold text-slate-900 mb-4">Summary</h3>
             <div className="grid grid-cols-2 gap-4">
-              <SummaryItem icon={TrendingUp} label="Resolution Rate" value={total > 0 ? `${Math.round((resolved / total) * 100)}%` : '—'} />
+              <SummaryItem icon={TrendingUp} label="Closure Rate" value={total > 0 ? `${Math.round((resolved / total) * 100)}%` : '—'} />
               <SummaryItem icon={Award} label="Feedback Given" value={`${complaints.filter((c) => c.feedback_rating).length}`} />
               <SummaryItem icon={Activity} label="This Month" value={`${complaints.filter((c) => new Date(c.created_at).getMonth() === new Date().getMonth()).length}`} />
               <SummaryItem icon={ClipboardList} label="Total Filed" value={`${total}`} />
@@ -352,10 +401,36 @@ export function ProfileScreen() {
                 </button>
               </div>
               <form onSubmit={handleSave} className="space-y-3">
+                {saveError && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{saveError}</div>
+                )}
+                {saveSuccess && (
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">Profile updated successfully.</div>
+                )}
                 <FormField label="Full Name" icon={User}>
                   <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required
                     className="w-full bg-transparent outline-none text-sm text-slate-900" />
                 </FormField>
+                {role === 'student' && (
+                  <>
+                    <FormField label="Email" icon={Mail}>
+                      <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required
+                        className="w-full bg-transparent outline-none text-sm text-slate-900" />
+                    </FormField>
+                    {form.email.trim().toLowerCase() !== (user?.email || '').toLowerCase() && (
+                      <>
+                        <FormField label="Current Password (required for email change)" icon={Lock}>
+                          <input type="password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} required
+                            placeholder="Enter current password"
+                            className="w-full bg-transparent outline-none text-sm text-slate-900" />
+                        </FormField>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Your CampusFix login email will also change. Next time, sign in with the new email.
+                        </p>
+                      </>
+                    )}
+                  </>
+                )}
                 <FormField label="College ID" icon={BadgeCheck}>
                   <input value={form.college_id} onChange={(e) => setForm({ ...form, college_id: e.target.value })}
                     className="w-full bg-transparent outline-none text-sm text-slate-900" />

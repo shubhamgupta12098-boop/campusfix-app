@@ -5,7 +5,8 @@ export const STATUS_CONFIG: Record<ComplaintStatus, { label: string; color: stri
   verified: { label: 'Verified', color: 'text-blue-700', bg: 'bg-blue-50', dot: 'bg-blue-500' },
   assigned: { label: 'Assigned', color: 'text-indigo-700', bg: 'bg-indigo-50', dot: 'bg-indigo-500' },
   in_progress: { label: 'In Progress', color: 'text-amber-700', bg: 'bg-amber-50', dot: 'bg-amber-500' },
-  resolved: { label: 'Resolved', color: 'text-emerald-700', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
+  waiting_approval: { label: 'Waiting Approval', color: 'text-violet-700', bg: 'bg-violet-50', dot: 'bg-violet-500' },
+  resolved: { label: 'Closed', color: 'text-emerald-700', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
   closed: { label: 'Closed', color: 'text-slate-600', bg: 'bg-slate-100', dot: 'bg-slate-400' },
   rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-50', dot: 'bg-red-500' },
 };
@@ -18,7 +19,7 @@ export const PRIORITY_CONFIG: Record<ComplaintPriority, { label: string; color: 
 };
 
 export const STATUS_FLOW: ComplaintStatus[] = [
-  'submitted', 'verified', 'assigned', 'in_progress', 'resolved', 'closed'
+  'submitted', 'verified', 'assigned', 'in_progress', 'waiting_approval', 'closed'
 ];
 
 export function formatDate(dateStr?: string) {

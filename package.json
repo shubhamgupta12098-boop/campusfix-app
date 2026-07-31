@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "server": "npm --prefix server run dev",
+    "install:all": "npm install && npm --prefix server install"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

@@ -63,7 +63,7 @@ export function MyComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: 
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <Filter className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          {(['all', 'submitted', 'verified', 'assigned', 'in_progress', 'resolved', 'closed'] as const).map((s) => (
+          {(['all', 'submitted', 'verified', 'assigned', 'in_progress', 'closed'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}

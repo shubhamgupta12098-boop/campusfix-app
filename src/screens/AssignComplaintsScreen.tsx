@@ -4,28 +4,41 @@ import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
 import type { Complaint, Profile, Technician } from '@/lib/supabase';
-import { ClipboardList, Wrench, MapPin, User, Clock, X, Send } from 'lucide-react';
+import { ClipboardList, Wrench, MapPin, User, Clock, X, Send, Image } from 'lucide-react';
 
-export function AssignComplaintsScreen() {
+export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
   const { profile } = useAuthStore();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [technicians, setTechnicians] = useState<(Profile & { technician?: Technician })[]>([]);
   const [loading, setLoading] = useState(true);
   const [assignModal, setAssignModal] = useState<Complaint | null>(null);
   const [selectedTech, setSelectedTech] = useState('');
+  const [error, setError] = useState('');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
-    void load();
-  }, []);
+    if (profile?.id) void load();
+  }, [profile?.id]);
 
   const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
     const [c, t] = await Promise.all([
       supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
       supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
     ]);
+    if (c.error) throw new Error(c.error.message);
+    if (t.error) throw new Error(t.error.message);
     setComplaints((c.data || []) as unknown as Complaint[]);
     setTechnicians((t.data || []) as unknown as (Profile & { technician?: Technician })[]);
-    setLoading(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load assigned complaints.');
+      setComplaints([]);
+      setTechnicians([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verify = async (c: Complaint) => {
@@ -40,12 +53,17 @@ export function AssignComplaintsScreen() {
   };
 
   const assign = async () => {
-    if (!assignModal || !selectedTech) return;
-    await supabase.from('complaints').update({
+    if (!assignModal || !selectedTech || assigning) return;
+    setAssigning(true);
+    setError('');
+    try {
+    const chosenStaff = technicians.find((t) => t.id === selectedTech);
+    const updateResult = await supabase.from('complaints').update({
       status: 'assigned', assigned_to: selectedTech, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq('id', assignModal.id);
+    if (updateResult.error) throw new Error(updateResult.error.message);
     await supabase.from('complaint_status_history').insert({
-      complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: 'Assigned to technician',
+      complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: `Assigned to ${chosenStaff?.full_name || 'staff'}`,
     });
     await supabase.from('notifications').insert([
       { user_id: selectedTech, title: 'New Job Assigned', message: assignModal.title, type: 'assigned', related_id: assignModal.id },
@@ -55,7 +73,12 @@ export function AssignComplaintsScreen() {
     await supabase.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
     setAssignModal(null);
     setSelectedTech('');
-    void load();
+    await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Complaint could not be assigned.');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   if (loading) return <Spinner />;
@@ -64,21 +87,37 @@ export function AssignComplaintsScreen() {
     <div className="max-w-4xl mx-auto">
       <PageHeader title="Assign Complaints" subtitle={`${complaints.length} pending complaints`} />
 
+      {error && (
+        <Card className="p-4 mb-4 border border-red-200 bg-red-50">
+          <p className="text-sm font-semibold text-red-700">Assigned complaints could not be loaded</p>
+          <p className="text-xs text-red-600 mt-1 break-words">{error}</p>
+          <button onClick={() => void load()} className="mt-3 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold">Retry</button>
+        </Card>
+      )}
+
       {complaints.length === 0 ? (
         <Card className="p-0"><EmptyState icon={ClipboardList} title="All caught up" description="No complaints pending assignment." /></Card>
       ) : (
         <div className="space-y-3">
           {complaints.map((c) => {
-            const sc = STATUS_CONFIG[c.status];
-            const pc = PRIORITY_CONFIG[c.priority];
+            const sc = STATUS_CONFIG[c.status] || STATUS_CONFIG.submitted;
+            const pc = PRIORITY_CONFIG[c.priority] || PRIORITY_CONFIG.medium;
             return (
               <Card key={c.id} className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: (c.complaint_categories?.color || '#3B82F6') + '15' }}>
-                    <Wrench className="w-5 h-5" style={{ color: c.complaint_categories?.color || '#3B82F6' }} />
-                  </div>
+                  {c.photo_urls && c.photo_urls.length > 0 ? (
+                    <button onClick={() => onOpenComplaint(c.id)} className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-slate-200">
+                      <img src={c.photo_urls[0]} alt={c.title} className="w-full h-full object-cover" />
+                    </button>
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: (c.complaint_categories?.color || '#3B82F6') + '15' }}>
+                      <Wrench className="w-5 h-5" style={{ color: c.complaint_categories?.color || '#3B82F6' }} />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-slate-900">{c.title}</h3>
+                    <button onClick={() => onOpenComplaint(c.id)} className="text-left w-full">
+                      <h3 className="text-sm font-semibold text-slate-900 hover:text-blue-600">{c.title}</h3>
+                    </button>
                     <p className="text-xs text-slate-500 mt-0.5">{c.complaint_no} · {c.complaint_categories?.name} · {formatDate(c.created_at)}</p>
                     <p className="text-xs text-slate-600 mt-1.5 line-clamp-2">{c.description}</p>
                     <div className="flex items-center gap-2 mt-2.5 flex-wrap">
@@ -86,16 +125,22 @@ export function AssignComplaintsScreen() {
                       <Badge className={`${pc.bg} ${pc.color} border ${pc.border}`}>{pc.label}</Badge>
                       {c.buildings && <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{c.buildings.name}</span>}
                       {c.assigned_profile && <span className="text-xs text-slate-500 flex items-center gap-1"><User className="w-3 h-3" />{c.assigned_profile.full_name}</span>}
+                      {c.photo_urls && c.photo_urls.length > 0 && (
+                        <span className="text-xs text-slate-500 flex items-center gap-1"><Image className="w-3 h-3" />{c.photo_urls.length} photo{c.photo_urls.length > 1 ? 's' : ''}</span>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                  <button onClick={() => onOpenComplaint(c.id)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50">
+                    View Full Detail
+                  </button>
                   {c.status === 'submitted' && (
                     <button onClick={() => verify(c)} className="flex-1 py-2 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100">
                       Verify
                     </button>
                   )}
-                  <button onClick={() => setAssignModal(c)} className="flex-1 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700">
+                  <button onClick={() => { setSelectedTech(c.assigned_to || ''); setAssignModal(c); }} className="flex-1 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700">
                     {c.assigned_to ? 'Reassign' : 'Assign Technician'}
                   </button>
                 </div>
@@ -115,7 +160,20 @@ export function AssignComplaintsScreen() {
                 <button onClick={() => setAssignModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
               </div>
               <p className="text-sm text-slate-600 mb-1">{assignModal.title}</p>
-              <p className="text-xs text-slate-400 mb-4">{assignModal.complaint_categories?.name} · {PRIORITY_CONFIG[assignModal.priority].label}</p>
+              <p className="text-xs text-slate-400 mb-2">{assignModal.complaint_categories?.name} · {(PRIORITY_CONFIG[assignModal.priority] || PRIORITY_CONFIG.medium).label}</p>
+              <p className="text-xs text-slate-600 mb-3 line-clamp-3">{assignModal.description}</p>
+              {assignModal.photo_urls && assignModal.photo_urls.length > 0 && (
+                <div className="flex gap-2 mb-4 overflow-x-auto">
+                  {assignModal.photo_urls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                      <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" />
+                    </a>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => onOpenComplaint(assignModal.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 mb-4 -mt-1 block">
+                View full complaint detail →
+              </button>
 
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {technicians.length === 0 ? (
@@ -135,7 +193,8 @@ export function AssignComplaintsScreen() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-slate-900">{t.full_name}</p>
-                          <p className="text-xs text-slate-500">{t.technician?.employee_code || 'No code'}</p>
+                          <p className="text-xs text-slate-500">{t.department || 'General Maintenance'}{t.phone ? ` · ${t.phone}` : ''}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{t.technician?.employee_code || t.email || 'Staff account'}</p>
                           {t.technician?.skills && t.technician.skills.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {t.technician.skills.slice(0, 3).map((s: string) => <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{s}</span>)}
@@ -156,11 +215,11 @@ export function AssignComplaintsScreen() {
 
               <button
                 onClick={assign}
-                disabled={!selectedTech}
+                disabled={!selectedTech || assigning}
                 className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
-                Assign
+                {assigning ? 'Assigning…' : 'Assign Staff'}
               </button>
             </div>
           </Card>

@@ -21,19 +21,35 @@ export function UserManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
   }, []);
 
   const load = async () => {
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    setUsers((data || []) as Profile[]);
+    setLoading(true);
+    setError(null);
+    const { data, error: loadError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (loadError) setError(loadError.message);
+    setUsers(((data || []) as Profile[]).map((u) => ({
+      ...u,
+      full_name: u.full_name || u.email?.split('@')[0] || 'Unnamed user',
+      role: (['admin', 'staff', 'student'].includes(String(u.role).toLowerCase()) ? String(u.role).toLowerCase() : 'student') as UserRole,
+      is_active: u.is_active !== false,
+    })));
     setLoading(false);
   };
 
   const toggleActive = async (user: Profile) => {
-    await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+    const { error: updateError } = await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+    if (updateError) return setError(updateError.message);
+    void load();
+  };
+
+  const changeRole = async (user: Profile, role: UserRole) => {
+    const { error: updateError } = await supabase.from('profiles').update({ role }).eq('id', user.id);
+    if (updateError) return setError(updateError.message);
     void load();
   };
 
@@ -48,6 +64,7 @@ export function UserManagementScreen() {
   return (
     <div className="max-w-5xl mx-auto">
       <PageHeader title="User Management" subtitle={`${users.length} registered users`} />
+      {error && <Card className="p-4 mb-4 border border-red-100 bg-red-50 text-sm text-red-700">{error}</Card>}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="flex-1 relative">
@@ -85,11 +102,25 @@ export function UserManagementScreen() {
                       {!u.is_active && <Badge className="bg-slate-100 text-slate-500">Inactive</Badge>}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">{u.college_id || 'No ID'} {u.department && `· ${u.department}`} {u.hostel && `· ${u.hostel}`}</p>
+                    <div className="mt-2 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
+                      <span><b>Email:</b> {u.email || '—'}</span>
+                      <span><b>Phone:</b> {u.phone || '—'}</span>
+                      <span><b>Location:</b> {[u.hostel, u.block, u.room].filter(Boolean).join(' / ') || '—'}</span>
+                      <span><b>Joined:</b> {u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—'}</span>
+                    </div>
                   </div>
-                  <Badge className={`bg-${color}-50 text-${color}-700 flex-shrink-0`}>
-                    <Icon className="w-3 h-3" />
-                    {u.role}
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Icon className="w-4 h-4 text-slate-500" />
+                    <select
+                      value={u.role}
+                      onChange={(e) => void changeRole(u, e.target.value as UserRole)}
+                      className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 outline-none focus:border-blue-400"
+                    >
+                      <option value="student">Student</option>
+                      <option value="staff">Staff</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
                   <button
                     onClick={() => toggleActive(u)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-colors ${u.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}

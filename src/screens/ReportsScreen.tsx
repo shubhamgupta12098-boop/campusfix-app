@@ -19,8 +19,10 @@ export function ReportsScreen() {
   }, []);
 
   const load = async () => {
+    let complaintQuery = supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').order('created_at', { ascending: false });
+    if (profile?.role === 'staff') complaintQuery = complaintQuery.eq('assigned_to', profile.id);
     const [c, cats, blds, techs] = await Promise.all([
-      supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').order('created_at', { ascending: false }),
+      complaintQuery,
       supabase.from('complaint_categories').select('*'),
       supabase.from('buildings').select('*'),
       supabase.from('profiles').select('*').eq('role', 'staff'),
@@ -102,8 +104,8 @@ export function ReportsScreen() {
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader
-        title="Reports & Analytics"
-        subtitle="Insights into campus maintenance performance"
+        title={profile?.role === 'staff' ? 'My Reports' : 'Reports & Analytics'}
+        subtitle={profile?.role === 'staff' ? 'Only your assigned and completed work is shown' : 'Insights into campus maintenance performance'}
         action={
           <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-lg transition-all">
             <Download className="w-4 h-4" />
@@ -114,7 +116,7 @@ export function ReportsScreen() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total" value={stats.total} icon={FileBarChart} color="blue" />
-        <StatCard label="Resolution Rate" value={`${stats.resolutionRate}%`} icon={TrendingUp} color="emerald" />
+        <StatCard label="Closure Rate" value={`${stats.resolutionRate}%`} icon={TrendingUp} color="emerald" />
         <StatCard label="Avg Resolution" value={`${stats.avgResolutionHours}h`} icon={Clock} color="violet" />
         <StatCard label="Overdue" value={stats.overdue} icon={AlertTriangle} color="rose" />
       </div>
@@ -162,7 +164,7 @@ export function ReportsScreen() {
         </Card>
 
         {/* Technician performance */}
-        <Card className="p-5 lg:col-span-2">
+        {profile?.role === 'admin' && <Card className="p-5 lg:col-span-2">
           <h3 className="font-bold text-slate-900 mb-4">Technician Performance</h3>
           {stats.byTechnician.length === 0 ? <p className="text-sm text-slate-400">No assigned complaints yet</p> : (
             <div className="overflow-x-auto">
@@ -195,7 +197,7 @@ export function ReportsScreen() {
               </table>
             </div>
           )}
-        </Card>
+        </Card>}
       </div>
     </div>
   );
