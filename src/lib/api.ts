@@ -1,4 +1,8 @@
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+const configuredApiUrl = String(import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/$/, '');
+// Render par VITE_API_URL me backend ka base URL diya jata hai, jaise
+// https://campusfix-app-x04t.onrender.com. API routes server par /api se start
+// hote hain, isliye /api missing ho to automatically add kar dete hain.
+const API_URL = /\/api$/i.test(configuredApiUrl) ? configuredApiUrl : `${configuredApiUrl}/api`;
 const TOKEN_KEY = 'campusfix_mongo_token';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);

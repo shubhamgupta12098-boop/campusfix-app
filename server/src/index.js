@@ -133,6 +133,16 @@ async function enrich(collection, row) {
   return row;
 }
 
+// Root health page so opening the Render backend URL does not show "Cannot GET /".
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'CampusFix API',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
+    health: '/api/health',
+  });
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -345,7 +355,7 @@ connectMongoDB().then(async () => {
   } else if (/bad auth|Authentication failed/i.test(message)) {
     console.error('Username/password galat hai. Atlas Database Access me password reset karke setup-mongodb.ps1 dobara chalayein.');
   } else if (/IP.*access|not authorized|whitelist/i.test(message)) {
-    console.error('Atlas Network Access me current IP address add karein.');
+    console.error('Atlas Network Access > IP Access List me 0.0.0.0/0 add karein, phir Render service redeploy karein.');
   }
   process.exit(1);
 });
