@@ -19,10 +19,33 @@ fs.mkdirSync(uploadDir, { recursive: true });
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(v => v.trim());
-app.use(cors({ origin: (origin, cb) => !origin || allowedOrigins.includes(origin) ? cb(null, true) : cb(new Error('Origin not allowed')), credentials: true }));
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(v => v.trim()).filter(Boolean);
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // non-browser clients (curl, server-to-server, health checks)
+  if (allowedOrigins.includes(origin)) return true;
+  // Safety net for Render deployments: allow any *.onrender.com origin even if CLIENT_URL was
+  // misconfigured, so a wrong/missing CLIENT_URL doesn't silently break login for everyone.
+  try { if (new URL(origin).hostname.endsWith('.onrender.com')) return true; } catch { /* ignore invalid origin */ }
+  return false;
+};
+app.use(cors({
+  origin: (origin, cb) => {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    console.warn(`[CORS] Blocked request from origin "${origin}". Add it to CLIENT_URL env var if this is expected.`);
+    cb(new Error(`Origin not allowed: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '25mb' }));
 app.use('/uploads', express.static(uploadDir));
+// Return JSON errors instead of Express's default HTML error page, so the frontend never
+// crashes trying to JSON.parse an HTML response (e.g. when CORS rejects an origin).
+app.use((err, _req, res, next) => {
+  if (!err) return next();
+  console.error('Unhandled request error:', err.message);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
 
 const models = new Map();
 const modelFor = (name) => {
@@ -132,16 +155,6 @@ async function enrich(collection, row) {
   }
   return row;
 }
-
-// Root health page so opening the Render backend URL does not show "Cannot GET /".
-app.get('/', (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    service: 'CampusFix API',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
-    health: '/api/health',
-  });
-});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
 app.post('/api/auth/signup', async (req, res) => {
@@ -355,7 +368,7 @@ connectMongoDB().then(async () => {
   } else if (/bad auth|Authentication failed/i.test(message)) {
     console.error('Username/password galat hai. Atlas Database Access me password reset karke setup-mongodb.ps1 dobara chalayein.');
   } else if (/IP.*access|not authorized|whitelist/i.test(message)) {
-    console.error('Atlas Network Access > IP Access List me 0.0.0.0/0 add karein, phir Render service redeploy karein.');
+    console.error('Atlas Network Access me current IP address add karein.');
   }
   process.exit(1);
 });

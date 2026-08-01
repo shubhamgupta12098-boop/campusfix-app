@@ -1,22 +1,34 @@
-const configuredApiUrl = String(import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/$/, '');
-// Render par VITE_API_URL me backend ka base URL diya jata hai, jaise
-// https://campusfix-app-x04t.onrender.com. API routes server par /api se start
-// hote hain, isliye /api missing ho to automatically add kar dete hain.
-const API_URL = /\/api$/i.test(configuredApiUrl) ? configuredApiUrl : `${configuredApiUrl}/api`;
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 const TOKEN_KEY = 'campusfix_mongo_token';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string | null) => token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY);
+
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[CampusFix] VITE_API_URL is not set at build time. Falling back to', API_URL, '- set VITE_API_URL in your Render static site env vars and redeploy.');
+}
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new Error(`Could not reach the server at ${API_URL}. Check that the API is deployed/running and VITE_API_URL is set correctly.`);
+  }
+
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: any = null;
+  if (text) {
+    try { body = JSON.parse(text); }
+    catch { throw new Error(`Server returned an unexpected (non-JSON) response from ${API_URL}${path} (status ${response.status}). This usually means VITE_API_URL is pointing at the wrong place, or CORS/the backend rejected the request.`); }
+  }
   if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+  if (body === null) throw new Error('Server returned an empty response. Check that the backend is deployed and reachable.');
   return body as T;
 }
 
