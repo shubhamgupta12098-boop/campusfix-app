@@ -1,4 +1,4 @@
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'https://campusfix-app-x04t.onrender.com').replace(/\/$/, '');
 // Accept either https://host or https://host/api in VITE_API_URL.
 // All frontend calls below use paths such as /auth/login, so normalize to the /api base.
 const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;

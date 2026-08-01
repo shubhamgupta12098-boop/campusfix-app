@@ -246,9 +246,9 @@ app.post('/api/auth/password-reset', async (req, res) => {
     await transport.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
       to: email,
-      subject: 'CMMS password reset',
+      subject: 'CCMMS password reset',
       text: `CampusFix password reset link (valid for 30 minutes): ${resetUrl}`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Reset your CMMS password</h2><p>This link is valid for 30 minutes.</p><p><a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:white;padding:12px 18px;border-radius:8px;text-decoration:none">Reset Password</a></p><p>If you did not request this, ignore this email.</p></div>`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Reset your CCMMS password</h2><p>This link is valid for 30 minutes.</p><p><a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:white;padding:12px 18px;border-radius:8px;text-decoration:none">Reset Password</a></p><p>If you did not request this, ignore this email.</p></div>`,
     });
     res.json(generic);
   } catch (e) {

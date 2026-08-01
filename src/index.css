@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 
-/* CMMS profile-controlled dark mode */
+/* CCMMS profile-controlled dark mode */
 html.dark body, html.dark #root { background:#071225; color:#e5edf8; }
 html.dark .bg-slate-50 { background-color:#071225 !important; }
 html.dark .bg-white { background-color:#0f1e33 !important; }

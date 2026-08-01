@@ -85,9 +85,9 @@ export function AuthScreen() {
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(59,130,246,0.4) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(14,165,233,0.3) 0%, transparent 50%)' }} />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
-            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-14 h-14 rounded-xl object-cover bg-white shadow-lg" />
+            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-14 h-14 rounded-xl object-cover bg-white shadow-lg" />
             <div>
-              <h1 className="text-xl font-bold tracking-tight">CMMS</h1>
+              <h1 className="text-xl font-bold tracking-tight">CCMMS</h1>
               <p className="text-xs text-slate-400">Campus Complaint Management</p>
             </div>
           </div>
@@ -123,15 +123,15 @@ export function AuthScreen() {
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <div className="w-full max-w-md py-8">
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <img src="/cmms-logo.jpeg" alt="CMMS logo" className="w-12 h-12 rounded-xl object-cover" />
-            <h1 className="text-lg font-bold text-slate-900">CMMS</h1>
+            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-12 h-12 rounded-xl object-cover" />
+            <h1 className="text-lg font-bold text-slate-900">CCMMS</h1>
           </div>
 
           <h2 className="text-2xl font-bold text-slate-900 mb-1">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-slate-500 text-sm mb-6">
-            {mode === 'login' ? 'Sign in to manage campus maintenance' : 'Join CMMS to report and track issues'}
+            {mode === 'login' ? 'Sign in to manage campus maintenance' : 'Join CCMMS to report and track issues'}
           </p>
 
           {error && (
