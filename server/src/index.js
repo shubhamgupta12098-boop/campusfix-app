@@ -19,13 +19,28 @@ fs.mkdirSync(uploadDir, { recursive: true });
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(v => v.trim()).filter(Boolean);
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map(v => v.trim())
+  .filter(Boolean);
+
+// Capacitor/Ionic WebViews use localhost-style origins even on a real Android device.
+// These origins are safe to allow because authentication still requires a valid JWT.
+const mobileOrigins = new Set([
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+]);
+
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // non-browser clients (curl, server-to-server, health checks)
+  if (!origin) return true; // native/non-browser clients, curl, health checks
   if (allowedOrigins.includes(origin)) return true;
-  // Safety net for Render deployments: allow any *.onrender.com origin even if CLIENT_URL was
-  // misconfigured, so a wrong/missing CLIENT_URL doesn't silently break login for everyone.
-  try { if (new URL(origin).hostname.endsWith('.onrender.com')) return true; } catch { /* ignore invalid origin */ }
+  if (mobileOrigins.has(origin)) return true;
+  // Safety net for Render deployments: allow any *.onrender.com frontend origin.
+  try {
+    if (new URL(origin).hostname.endsWith('.onrender.com')) return true;
+  } catch { /* ignore invalid origin */ }
   return false;
 };
 app.use(cors({

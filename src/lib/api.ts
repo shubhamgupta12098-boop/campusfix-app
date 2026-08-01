@@ -1,4 +1,7 @@
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+// Accept either https://host or https://host/api in VITE_API_URL.
+// All frontend calls below use paths such as /auth/login, so normalize to the /api base.
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 const TOKEN_KEY = 'campusfix_mongo_token';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
