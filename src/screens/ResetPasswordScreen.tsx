@@ -12,8 +12,8 @@ export function ResetPasswordScreen({ token, onDone }: { token: string; onDone: 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) return setError('Password kam se kam 6 characters ka hona chahiye.');
-    if (password !== confirm) return setError('Dono passwords match nahi kar rahe.');
+    if (password.length < 6) return setError('Password must be at least 6 characters long.');
+    if (password !== confirm) return setError('The passwords do not match.');
     setLoading(true);
     try {
       const result = await api<{ message: string }>('/auth/reset-password', {
@@ -31,7 +31,7 @@ export function ResetPasswordScreen({ token, onDone }: { token: string; onDone: 
       <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-6">
         <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4"><KeyRound className="w-6 h-6" /></div>
         <h1 className="text-2xl font-bold text-slate-900">Set new password</h1>
-        <p className="text-sm text-slate-500 mt-1 mb-5">Naya CampusFix password enter karein.</p>
+        <p className="text-sm text-slate-500 mt-1 mb-5">Enter and confirm your new CampusFix password.</p>
         {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
         {success ? (
           <div>

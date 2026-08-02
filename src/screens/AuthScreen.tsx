@@ -58,7 +58,7 @@ export function AuthScreen() {
     setForgotError('');
     setForgotNotice('');
     if (!forgotEmail.trim()) {
-      setForgotError('Registered email address enter karo.');
+      setForgotError('Please enter your registered email address.');
       return;
     }
     setSubmitting(true);
@@ -68,7 +68,7 @@ export function AuthScreen() {
       setForgotError(result.error);
       return;
     }
-    setForgotNotice('Password reset link email par bhej diya gaya hai. Inbox ke saath Spam/Junk folder bhi check karo.');
+    setForgotNotice('A password reset link has been sent. Please check your inbox and Spam or Junk folder.');
   };
 
   const switchMode = () => {
@@ -254,7 +254,7 @@ export function AuthScreen() {
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
               <div className="flex gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><KeyRound className="h-5 w-5" /></div>
-                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">Registered email par 30-minute password reset link bheja jayega.</p></div>
+                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">We will email a secure password reset link that expires in 30 minutes.</p></div>
               </div>
               <button type="button" onClick={() => setForgotOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><X className="h-5 w-5" /></button>
             </div>
@@ -265,7 +265,7 @@ export function AuthScreen() {
                 <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@campus.edu" autoFocus className="w-full bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-400" />
               </Field>
               <button type="button" onClick={sendResetLink} disabled={submitting} className="w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{submitting ? 'Sending link…' : 'Send Password Reset Link'}</button>
-              <p className="text-center text-xs text-slate-500">Email na mile to Spam/Junk folder check karein. SMTP server/.env mein configured hona chahiye.</p>
+              <p className="text-center text-xs text-slate-500">If you do not see the email, check your Spam or Junk folder.</p>
             </div>
           </div>
         </div>

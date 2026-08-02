@@ -52,7 +52,38 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '25mb' }));
-app.use('/uploads', express.static(uploadDir));
+// Serve uploaded images from MongoDB GridFS so they survive Render restarts/redeploys.
+// A local-disk fallback is kept for files created by older/local versions.
+app.get('/uploads/:filename', async (req, res) => {
+  try {
+    const filename = path.basename(String(req.params.filename || ''));
+    if (!filename) return res.status(400).send('Invalid filename');
+
+    const localPath = path.join(uploadDir, filename);
+    if (fs.existsSync(localPath)) return res.sendFile(localPath);
+
+    if (!mongoose.connection.db) return res.status(503).send('Storage is not ready');
+    const files = mongoose.connection.db.collection('uploads.files');
+    const stored = await files.findOne({ filename }, { sort: { uploadDate: -1 } });
+    if (!stored) return res.status(404).send('Image not found');
+
+    res.setHeader('Content-Type', stored.contentType || stored.metadata?.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(stored.length));
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+    const stream = bucket.openDownloadStream(stored._id);
+    stream.on('error', (error) => {
+      console.error('Image download failed:', error);
+      if (!res.headersSent) res.status(404).send('Image not found');
+      else res.destroy(error);
+    });
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Image serving failed:', error);
+    if (!res.headersSent) res.status(500).send('Could not load image');
+  }
+});
 // Return JSON errors instead of Express's default HTML error page, so the frontend never
 // crashes trying to JSON.parse an HTML response (e.g. when CORS rejects an origin).
 app.use((err, _req, res, next) => {
@@ -218,45 +249,82 @@ app.post('/api/auth/change-email', auth, async (req, res) => {
   res.json({ email, token: tokenFor(user) });
 });
 app.post('/api/auth/password-reset', async (req, res) => {
+  let createdTokenId = null;
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
-    const generic = { ok: true, message: 'If this email is registered, a password reset link has been sent.' };
-    if (!email) return res.status(400).json({ error: 'Email is required.' });
+    const generic = { ok: true, message: 'If an account exists for this email, a password reset link has been sent.' };
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    // Always return the same success response for registered and unregistered
+    // addresses so this endpoint cannot be used to discover user accounts.
     const user = await User.findOne({ email });
     if (!user) return res.json(generic);
+
+    const transport = mailTransport();
+    if (!transport) {
+      console.error('Password reset email is unavailable: SMTP environment variables are missing.');
+      return res.status(503).json({ error: 'Password reset email is temporarily unavailable. Please contact the administrator.' });
+    }
 
     await PasswordResetToken.deleteMany({ user_id: user.profile_id, used_at: null });
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    await PasswordResetToken.create({
+    const resetToken = await PasswordResetToken.create({
       user_id: user.profile_id,
       token_hash: tokenHash,
       expires_at: new Date(Date.now() + 30 * 60 * 1000),
     });
+    createdTokenId = resetToken._id;
 
-    const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
+    const configuredClientUrl = String(process.env.CLIENT_URL || 'http://localhost:5173')
+      .split(',')
+      .map(value => value.trim())
+      .find(Boolean);
+    const clientUrl = configuredClientUrl.replace(/\/$/, '');
     const resetUrl = `${clientUrl}/?resetToken=${encodeURIComponent(rawToken)}`;
-    const transport = mailTransport();
-    if (!transport) {
-      console.warn('SMTP is not configured. Password reset URL:', resetUrl);
-      if (process.env.NODE_ENV !== 'production') return res.json({ ...generic, devResetUrl: resetUrl });
-      return res.status(503).json({ error: 'Email service is not configured. Ask the administrator to configure SMTP.' });
-    }
+    const productName = process.env.APP_NAME || 'CampusFix CCMMS';
 
     await transport.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      from: process.env.MAIL_FROM || `${productName} <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'CCMMS password reset',
-      text: `CampusFix password reset link (valid for 30 minutes): ${resetUrl}`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Reset your CCMMS password</h2><p>This link is valid for 30 minutes.</p><p><a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:white;padding:12px 18px;border-radius:8px;text-decoration:none">Reset Password</a></p><p>If you did not request this, ignore this email.</p></div>`,
+      subject: `Reset your ${productName} password`,
+      text: [
+        `We received a request to reset your ${productName} password.`,
+        '',
+        `Open this link to choose a new password: ${resetUrl}`,
+        '',
+        'This link expires in 30 minutes and can be used only once.',
+        'If you did not request a password reset, you can safely ignore this email.'
+      ].join('\n'),
+      html: `<!doctype html>
+        <html lang="en">
+          <body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
+            <div style="max-width:600px;margin:0 auto;padding:32px 16px">
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
+                <h1 style="font-size:24px;margin:0 0 16px">Reset your password</h1>
+                <p style="font-size:15px;line-height:1.6;margin:0 0 24px">We received a request to reset your ${productName} password.</p>
+                <p style="margin:0 0 24px"><a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Reset Password</a></p>
+                <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 12px">This secure link expires in 30 minutes and can be used only once.</p>
+                <p style="font-size:14px;line-height:1.6;color:#475569;margin:0">If you did not request this change, you can safely ignore this email.</p>
+              </div>
+            </div>
+          </body>
+        </html>`,
     });
+
     res.json(generic);
   } catch (e) {
+    // Do not leave a usable reset token behind when delivery fails.
+    if (createdTokenId) await PasswordResetToken.deleteOne({ _id: createdTokenId }).catch(() => {});
+    console.error('Password reset email error:', e);
     const raw = String(e?.message || e);
-    const hint = /535|BadCredentials|Username and Password not accepted/i.test(raw)
-      ? 'Gmail ne login reject kiya. SMTP_PASS me normal password nahi, Google ka 16-character App Password use karein.'
-      : raw;
-    res.status(500).json({ error: `Password reset email could not be sent: ${hint}` });
+    const error = /535|BadCredentials|Username and Password not accepted|Invalid login/i.test(raw)
+      ? 'The email service rejected its credentials. Configure SMTP_USER and a valid email app password in Render.'
+      : 'The password reset email could not be sent. Please try again later.';
+    res.status(500).json({ error });
   }
 });
 
@@ -279,12 +347,45 @@ app.post('/api/auth/reset-password', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-const storage = multer.diskStorage({ destination: uploadDir, filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname || '') || '.jpg'}`) });
-const upload = multer({ storage, limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith('image/')) });
-app.post('/api/upload', auth, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const base = `${req.protocol}://${req.get('host')}`;
-  res.status(201).json({ url: `${base}/uploads/${req.file.filename}` });
+// Keep uploads in MongoDB instead of Render's ephemeral filesystem.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype?.startsWith('image/')) return cb(new Error('Only image files are allowed.'));
+    cb(null, true);
+  },
+});
+
+app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+    if (!mongoose.connection.db) return res.status(503).json({ error: 'Image storage is not ready.' });
+
+    const extension = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
+    const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${extension}`;
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+
+    await new Promise((resolve, reject) => {
+      const stream = bucket.openUploadStream(filename, {
+        contentType: req.file.mimetype,
+        metadata: {
+          contentType: req.file.mimetype,
+          originalName: req.file.originalname,
+          uploadedBy: req.auth?.sub || null,
+        },
+      });
+      stream.on('error', reject);
+      stream.on('finish', resolve);
+      stream.end(req.file.buffer);
+    });
+
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.status(201).json({ url: `${base}/uploads/${filename}` });
+  } catch (error) {
+    console.error('Image upload failed:', error);
+    res.status(500).json({ error: error.message || 'Image upload failed.' });
+  }
 });
 
 app.get('/api/data/:collection', auth, async (req, res) => {
