@@ -17,6 +17,12 @@ const uploadDir = path.resolve(__dirname, '../uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const app = express();
+// Render sits the API behind a reverse proxy. Without this, req.protocol always
+// reports "http" (even though the public URL is https), so image URLs built from
+// req.protocol (see /api/upload below) come out as http://... . Browsers then
+// silently block loading that image on an https page (mixed content), which is
+// why uploaded images don't show up once deployed on Render.
+app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
