@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">CampusFix</string>
-    <string name="title_activity_main">CampusFix</string>
+    <string name="app_name">CCMMS</string>
+    <string name="title_activity_main">CCMMS</string>
     <string name="package_name">com.campusfix.app</string>
     <string name="custom_url_scheme">com.campusfix.app</string>
 </resources>
