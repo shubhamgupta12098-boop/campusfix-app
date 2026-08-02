@@ -1,0 +1,8 @@
+CLIENT_URL=https://YOUR-FRONTEND.onrender.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-google-app-password
+MAIL_FROM=CampusFix CCMMS <your-email@gmail.com>
+APP_NAME=CampusFix CCMMS
