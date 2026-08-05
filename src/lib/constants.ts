@@ -1,4 +1,4 @@
-import type { ComplaintStatus, ComplaintPriority } from '@/lib/supabase';
+import type { ComplaintStatus, ComplaintPriority } from '@/lib/mongodb';
 
 export const STATUS_CONFIG: Record<ComplaintStatus, { label: string; color: string; bg: string; dot: string }> = {
   submitted: { label: 'Submitted', color: 'text-slate-700', bg: 'bg-slate-100', dot: 'bg-slate-500' },

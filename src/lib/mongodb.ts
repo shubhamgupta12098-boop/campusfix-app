@@ -1,4 +1,4 @@
-// MongoDB-backed compatibility layer. Existing screens keep the familiar query-builder API.
+// MongoDB data access layer. Existing screens keep the familiar query-builder API.
 import { api } from '@/lib/api';
 
 export type UserRole = 'student' | 'staff' | 'admin';
@@ -64,4 +64,4 @@ class MongoQueryBuilder {
   }
 }
 
-export const supabase = { from(table: string) { return new MongoQueryBuilder(table); } };
+export const database = { from(table: string) { return new MongoQueryBuilder(table); } };

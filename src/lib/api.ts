@@ -1,4 +1,8 @@
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'https://campusfix-app-x04t.onrender.com').replace(/\/$/, '');
+const configuredApiUrl = String(import.meta.env.VITE_API_URL || '').trim();
+const browserDefault = typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ? window.location.origin
+  : 'https://campusfix-api.onrender.com';
+const rawApiUrl = (configuredApiUrl || browserDefault).replace(/\/$/, '');
 // Accept either https://host or https://host/api in VITE_API_URL.
 // All frontend calls below use paths such as /auth/login, so normalize to the /api base.
 const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
@@ -7,9 +11,25 @@ const TOKEN_KEY = 'campusfix_mongo_token';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string | null) => token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY);
 
-if (!import.meta.env.VITE_API_URL) {
-  console.warn('[CampusFix] VITE_API_URL is not set at build time. Falling back to', API_URL, '- set VITE_API_URL in your Render static site env vars and redeploy.');
+if (!configuredApiUrl) {
+  console.info('[CampusFix] Using API base:', API_URL);
 }
+
+export function resolveMediaUrl(value?: string | null): string {
+  if (!value) return '';
+  const url = String(value).trim();
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+  if (url.startsWith('/uploads/')) return `${rawApiUrl}${url}`;
+  try {
+    const parsed = new URL(url, rawApiUrl);
+    if (parsed.pathname.startsWith('/uploads/')) return `${rawApiUrl}${parsed.pathname}${parsed.search}`;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();

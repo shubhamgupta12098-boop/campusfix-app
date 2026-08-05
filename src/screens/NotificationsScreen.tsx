@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Spinner, EmptyState } from '@/components/ui';
 import { timeAgo } from '@/lib/constants';
-import type { Notification } from '@/lib/supabase';
+import type { Notification } from '@/lib/mongodb';
 import { Bell, CheckCheck, Wrench, AlertCircle, CheckCircle2, Clock, MessageSquare } from 'lucide-react';
 
 const TYPE_ICONS: Record<string, typeof Bell> = {
@@ -26,7 +26,7 @@ export function NotificationsScreen({ onOpenComplaint }: { onOpenComplaint: (id:
   }, []);
 
   const load = async () => {
-    const { data } = await supabase
+    const { data } = await database
       .from('notifications')
       .select('*')
       .eq('user_id', profile?.id)
@@ -37,13 +37,13 @@ export function NotificationsScreen({ onOpenComplaint }: { onOpenComplaint: (id:
   };
 
   const markAllRead = async () => {
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
+    await database.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
     void load();
   };
 
   const openNotification = async (notification: Notification) => {
     if (!notification.is_read) {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+      await database.from('notifications').update({ is_read: true }).eq('id', notification.id);
     }
     if (notification.related_id) {
       onOpenComplaint(notification.related_id);

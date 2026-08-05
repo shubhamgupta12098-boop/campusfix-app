@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import type { Complaint, WorkOrder } from '@/lib/supabase';
+import type { Complaint, WorkOrder } from '@/lib/mongodb';
 import { CheckCircle2, XCircle, Image, ShieldCheck, User, MapPin, Mail, Phone } from 'lucide-react';
 
 export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -14,7 +14,7 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await database
       .from('work_orders')
       .select('*, profiles!work_orders_technician_id_fkey(*), complaints(*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*))')
       .eq('approval_status', 'pending')
@@ -27,7 +27,7 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
   const decide = async (wo: WorkOrder, approved: boolean) => {
     setBusy(wo.id);
     const note = remarks[wo.id]?.trim() || (approved ? 'Work verified and approved by admin.' : 'Work rejected. Please fix the issue and submit again.');
-    await supabase.from('work_orders').update({
+    await database.from('work_orders').update({
       approval_status: approved ? 'approved' : 'rejected',
       approval_remarks: note,
       approved_by: profile?.id,
@@ -35,16 +35,16 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
       status: approved ? 'completed' : 'rework_required',
     }).eq('id', wo.id);
     const complaint = wo.complaints || await (async () => {
-      const r = await supabase.from('complaints').select('*').eq('id', wo.complaint_id).maybeSingle();
+      const r = await database.from('complaints').select('*').eq('id', wo.complaint_id).maybeSingle();
       return r.data as Complaint | null;
     })();
     if (complaint) {
-      await supabase.from('complaints').update({
+      await database.from('complaints').update({
         status: approved ? 'closed' : 'in_progress',
         closed_at: approved ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       }).eq('id', complaint.id);
-      await supabase.from('complaint_status_history').insert({
+      await database.from('complaint_status_history').insert({
         complaint_id: complaint.id,
         old_status: 'waiting_approval',
         new_status: approved ? 'closed' : 'in_progress',
@@ -53,8 +53,8 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
         remarks: note,
       });
       await Promise.all([
-        supabase.from('notifications').insert({ user_id: complaint.user_id, title: approved ? 'Complaint Closed' : 'Work Sent Back', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }),
-        wo.technician_id ? supabase.from('notifications').insert({ user_id: wo.technician_id, title: approved ? 'Complaint Closed' : 'Rework Required', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }) : Promise.resolve(null),
+        database.from('notifications').insert({ user_id: complaint.user_id, title: approved ? 'Complaint Closed' : 'Work Sent Back', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }),
+        wo.technician_id ? database.from('notifications').insert({ user_id: wo.technician_id, title: approved ? 'Complaint Closed' : 'Rework Required', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }) : Promise.resolve(null),
       ]);
     }
     setBusy(null);

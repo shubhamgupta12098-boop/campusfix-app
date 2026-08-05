@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
-import type { Complaint, ComplaintStatus } from '@/lib/supabase';
+import type { Complaint, ComplaintStatus } from '@/lib/mongodb';
 import { Wrench, Clock, MapPin, CheckCircle2, Play, Pause, Camera, X, AlertCircle, Image, FileText, Tag } from 'lucide-react';
 
 export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -30,7 +30,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (!profile?.id) { setComplaints([]); setLoading(false); return; }
     setLoading(true);
     setWorkError('');
-    const { data, error } = await supabase
+    const { data, error } = await database
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*)')
       .eq('assigned_to', profile.id)
@@ -62,7 +62,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     setActiveWorkOrderId(null);
     setWorkModal(c);
     setLoadingWorkOrder(true);
-    const { data } = await supabase
+    const { data } = await database
       .from('work_orders')
       .select('*')
       .eq('complaint_id', c.id)
@@ -109,9 +109,9 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     try {
       const updates: any = { status: 'in_progress', updated_at: new Date().toISOString() };
       if (!startModal.assigned_at) updates.assigned_at = new Date().toISOString();
-      await supabase.from('complaints').update(updates).eq('id', startModal.id);
+      await database.from('complaints').update(updates).eq('id', startModal.id);
 
-      await supabase.from('work_orders').insert({
+      await database.from('work_orders').insert({
         complaint_id: startModal.id,
         technician_id: profile?.id,
         work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -126,7 +126,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
         created_by: profile?.id,
       });
 
-      await supabase.from('complaint_status_history').insert({
+      await database.from('complaint_status_history').insert({
         complaint_id: startModal.id,
         old_status: startModal.status,
         new_status: 'in_progress',
@@ -134,7 +134,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
         remarks: 'Work started — before-repair photo captured',
       });
 
-      await supabase.from('notifications').insert({
+      await database.from('notifications').insert({
         user_id: startModal.user_id,
         title: 'Work Started',
         message: `${startModal.title} — Staff has started work on your complaint.`,
@@ -154,7 +154,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (!workModal) return;
     if (completionPhotos.length < 1) { setWorkError('At least one after-repair photo is required.'); return; }
     if (!repairNotes.trim()) { setWorkError('Completion remarks are required.'); return; }
-    await supabase.from('complaints').update({
+    await database.from('complaints').update({
       status: 'waiting_approval',
       updated_at: new Date().toISOString(),
     }).eq('id', workModal.id);
@@ -162,7 +162,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (activeWorkOrderId) {
       // Update the same work order that was opened at "Start Work" time so
       // the before photo captured then stays attached to this job.
-      await supabase.from('work_orders').update({
+      await database.from('work_orders').update({
         repair_notes: repairNotes.trim(),
         completion_photo_urls: completionPhotos,
         completion_time: new Date().toISOString(),
@@ -171,7 +171,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       }).eq('id', activeWorkOrderId);
     } else {
       // Fallback for older jobs that don't have a work order yet.
-      await supabase.from('work_orders').insert({
+      await database.from('work_orders').insert({
         complaint_id: workModal.id,
         technician_id: profile?.id,
         work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -189,7 +189,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       });
     }
 
-    await supabase.from('complaint_status_history').insert({
+    await database.from('complaint_status_history').insert({
       complaint_id: workModal.id,
       old_status: workModal.status,
       new_status: 'waiting_approval',
@@ -197,7 +197,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       remarks: repairNotes || 'Job completed',
     });
 
-    await supabase.from('notifications').insert({
+    await database.from('notifications').insert({
       user_id: workModal.user_id,
       title: 'Work Submitted for Approval',
       message: `${workModal.title} — Staff has submitted completion evidence for admin verification.`,
@@ -205,8 +205,8 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       related_id: workModal.id,
     });
 
-    const admins = await supabase.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
-    await Promise.all(((admins.data || []) as any[]).map((admin) => supabase.from('notifications').insert({
+    const admins = await database.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
+    await Promise.all(((admins.data || []) as any[]).map((admin) => database.from('notifications').insert({
       user_id: admin.id,
       title: 'Work Approval Required',
       message: `${workModal.title} has been submitted by ${profile?.full_name || 'staff'}.`,

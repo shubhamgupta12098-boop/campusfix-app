@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
-import type { UserRole } from '@/lib/supabase';
+import type { UserRole } from '@/lib/mongodb';
 import { LayoutDashboard, PlusCircle, ListChecks, Bell, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle, Star } from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
@@ -15,7 +15,7 @@ import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 type Screen =
@@ -69,7 +69,7 @@ export const AppShell = () => {
     if (!profile?.id) return;
     let active = true;
     const loadUnread = async () => {
-      const result = await supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+      const result = await database.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
       if (active) setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
     };
     void loadUnread();

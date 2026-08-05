@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
-import type { Complaint, Profile, Technician } from '@/lib/supabase';
+import type { Complaint, Profile, Technician } from '@/lib/mongodb';
 import { ClipboardList, Wrench, MapPin, User, Clock, X, Send, Image } from 'lucide-react';
 
 export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -25,8 +25,8 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
     setError('');
     try {
     const [c, t] = await Promise.all([
-      supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
+      database.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
+      database.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
     ]);
     if (c.error) throw new Error(c.error.message);
     if (t.error) throw new Error(t.error.message);
@@ -42,11 +42,11 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
   };
 
   const verify = async (c: Complaint) => {
-    await supabase.from('complaints').update({ status: 'verified', updated_at: new Date().toISOString() }).eq('id', c.id);
-    await supabase.from('complaint_status_history').insert({
+    await database.from('complaints').update({ status: 'verified', updated_at: new Date().toISOString() }).eq('id', c.id);
+    await database.from('complaint_status_history').insert({
       complaint_id: c.id, old_status: c.status, new_status: 'verified', changed_by: profile?.id, remarks: 'Complaint verified',
     });
-    await supabase.from('notifications').insert({
+    await database.from('notifications').insert({
       user_id: c.user_id, title: 'Complaint Verified', message: `${c.title} has been verified and is pending assignment.`, type: 'status_changed', related_id: c.id,
     });
     void load();
@@ -58,19 +58,19 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
     setError('');
     try {
     const chosenStaff = technicians.find((t) => t.id === selectedTech);
-    const updateResult = await supabase.from('complaints').update({
+    const updateResult = await database.from('complaints').update({
       status: 'assigned', assigned_to: selectedTech, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq('id', assignModal.id);
     if (updateResult.error) throw new Error(updateResult.error.message);
-    await supabase.from('complaint_status_history').insert({
+    await database.from('complaint_status_history').insert({
       complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: `Assigned to ${chosenStaff?.full_name || 'staff'}`,
     });
-    await supabase.from('notifications').insert([
+    await database.from('notifications').insert([
       { user_id: selectedTech, title: 'New Job Assigned', message: assignModal.title, type: 'assigned', related_id: assignModal.id },
       { user_id: assignModal.user_id, title: 'Technician Assigned', message: `${assignModal.title} — a technician has been assigned.`, type: 'assigned', related_id: assignModal.id },
     ]);
     // Update technician workload
-    await supabase.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
+    await database.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
     setAssignModal(null);
     setSelectedTech('');
     await load();

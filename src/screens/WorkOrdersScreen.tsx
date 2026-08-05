@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
-import type { WorkOrder } from '@/lib/supabase';
+import type { WorkOrder } from '@/lib/mongodb';
 import { ClipboardList, Wrench, Clock, DollarSign, FileText, Image as ImageIcon } from 'lucide-react';
+import { resolveMediaUrl } from '@/lib/api';
 
 export function WorkOrdersScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
@@ -15,7 +16,7 @@ export function WorkOrdersScreen({ onOpenComplaint }: { onOpenComplaint: (id: st
   const load = async () => {
     setLoading(true);
     setLoadError('');
-    const { data, error } = await supabase
+    const { data, error } = await database
       .from('work_orders')
       .select('*')
       .order('created_at', { ascending: false });
@@ -53,7 +54,7 @@ export function WorkOrdersScreen({ onOpenComplaint }: { onOpenComplaint: (id: st
                 <div className="flex items-start gap-3">
                   {complaint?.photo_urls?.[0] ? (
                     <button onClick={() => complaint?.id && onOpenComplaint(complaint.id)} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-slate-200">
-                      <img src={complaint.photo_urls[0]} alt="Complaint" className="w-full h-full object-cover" />
+                      <img src={resolveMediaUrl(complaint.photo_urls[0])} alt="Complaint" className="w-full h-full object-cover" />
                     </button>
                   ) : (
                     <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -111,8 +112,8 @@ function Evidence({ title, urls, empty }: { title: string; urls: string[]; empty
       {urls.length ? (
         <div className="grid grid-cols-2 gap-2">
           {urls.slice(0, 4).map((url, i) => (
-            <a key={`${url}-${i}`} href={url} target="_blank" rel="noreferrer" className="aspect-square rounded-lg overflow-hidden border border-slate-200">
-              <img src={url} alt={`${title} ${i + 1}`} className="w-full h-full object-cover" />
+            <a key={`${url}-${i}`} href={resolveMediaUrl(url)} target="_blank" rel="noreferrer" className="aspect-square rounded-lg overflow-hidden border border-slate-200">
+              <img src={resolveMediaUrl(url)} alt={`${title} ${i + 1}`} className="w-full h-full object-cover" />
             </a>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api, getToken, setToken } from '@/lib/api';
-import type { Profile, UserRole } from '@/lib/supabase';
+import type { Profile, UserRole } from '@/lib/mongodb';
 
 export interface AppUser { uid: string; email: string; displayName?: string; }
 type Session = { user: AppUser };

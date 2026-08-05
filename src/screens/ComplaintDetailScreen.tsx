@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { database } from '@/lib/mongodb';
 import { useAuthStore } from '@/lib/auth';
 import { Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, STATUS_FLOW, PRIORITY_CONFIG, formatDate, timeAgo } from '@/lib/constants';
-import type { Complaint, ComplaintStatus, WorkOrder } from '@/lib/supabase';
+import type { Complaint, ComplaintStatus, WorkOrder } from '@/lib/mongodb';
 import { ArrowLeft, MapPin, User, Wrench, Clock, Star, MessageSquare, CheckCircle2, AlertCircle, LockKeyhole } from 'lucide-react';
 
 interface StatusHistoryEntry {
@@ -41,7 +41,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
   const load = async () => {
     setLoading(true);
     setLoadError('');
-    const { data, error } = await supabase
+    const { data, error } = await database
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
       .eq('id', complaintId)
@@ -54,7 +54,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
     }
     setComplaint(data as unknown as Complaint);
 
-    const { data: histData } = await supabase
+    const { data: histData } = await database
       .from('complaint_status_history')
       .select('*, profiles!changed_by(full_name)')
       .eq('complaint_id', complaintId)
@@ -69,7 +69,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
     }));
     setHistory(hist);
 
-    const { data: workOrders } = await supabase
+    const { data: workOrders } = await database
       .from('work_orders')
       .select('*')
       .eq('complaint_id', complaintId)
@@ -86,17 +86,17 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
 
   const closeComplaint = async () => {
     if (!complaint || !profile?.id || !canClose) return;
-    if (!window.confirm('Is complaint ko permanently close karna hai?')) return;
+    if (!window.confirm('Permanently close this complaint?')) return;
     setClosing(true);
     setCloseMessage('');
     const now = new Date().toISOString();
-    const { error } = await supabase.from('complaints').update({
+    const { error } = await database.from('complaints').update({
       status: 'closed',
       closed_at: now,
       updated_at: now,
     }).eq('id', complaint.id);
     if (!error) {
-      await supabase.from('complaint_status_history').insert({
+      await database.from('complaint_status_history').insert({
         complaint_id: complaint.id,
         old_status: complaint.status,
         new_status: 'closed',
@@ -104,7 +104,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
         changed_by_name: profile.full_name,
         remarks: role === 'admin' ? 'Complaint closed by administrator.' : 'Complaint closed by student.',
       });
-      await supabase.from('notifications').insert({
+      await database.from('notifications').insert({
         user_id: complaint.user_id,
         title: 'Complaint Closed',
         message: `${complaint.title} has been closed.`,
@@ -113,7 +113,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
       });
     }
     setClosing(false);
-    if (error) setCloseMessage(error.message || 'Complaint close nahi hui.');
+    if (error) setCloseMessage(error.message || 'The complaint could not be closed.');
     else { setCloseMessage('Complaint successfully closed.'); await load(); }
   };
 
@@ -122,7 +122,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
     setSubmittingFeedback(true);
     setFeedbackMessage('');
     const submittedAt = new Date().toISOString();
-    const { error } = await supabase
+    const { error } = await database
       .from('complaints')
       .update({
         feedback_rating: rating,
@@ -133,7 +133,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
       .eq('id', complaintId);
     setSubmittingFeedback(false);
     if (error) {
-      setFeedbackMessage(error.message || 'Feedback submit nahi hua. Dobara try karo.');
+      setFeedbackMessage(error.message || 'Feedback could not be submitted. Please try again.');
       return;
     }
     setFeedbackOpen(false);
@@ -219,7 +219,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-sm font-bold text-slate-900">{complaint.status === 'closed' ? 'This complaint is closed.' : 'Final complaint closure'}</p>
-              <p className="text-xs text-slate-600 mt-1">{closeMessage || (role === 'admin' ? 'Work verify karke complaint ko final close karein.' : 'Kaam check karne ke baad complaint close karein.')}</p>
+              <p className="text-xs text-slate-600 mt-1">{closeMessage || (role === 'admin' ? 'Verify the completed work, then close the complaint.' : 'Check the completed work before closing the complaint.')}</p>
             </div>
             {canClose && <button disabled={closing} onClick={() => void closeComplaint()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"><LockKeyhole className="w-4 h-4" />{closing ? 'Closing…' : 'Close Complaint'}</button>}
           </div>
@@ -255,7 +255,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                   <p className="text-xs text-slate-500 mt-0.5">
                     {complaint.status === 'in_progress'
                       ? 'Work is currently in progress — before-repair photo captured so far.'
-                      : 'Staff ne kaam kaise kiya, uski before/after photos aur remarks.'}
+                      : 'Review the staff work, before-and-after photos, and remarks.'}
                   </p>
                 </div>
                 {workOrder.profiles?.full_name && <Badge className="bg-blue-50 text-blue-700">{workOrder.profiles.full_name}</Badge>}
@@ -354,7 +354,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
               <div className="flex items-center gap-3">
                 <Star className="w-5 h-5 text-amber-500" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">Staff ne kaam kaisa kiya?</p>
+                  <p className="text-sm font-semibold text-slate-900">How was the staff member’s work?</p>
                   <p className="text-xs text-slate-600">Before/after photos aur completed work dekhkar 1–5 star rating aur feedback dein.</p>
                 </div>
                 <button onClick={() => setFeedbackOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors">
@@ -384,7 +384,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
-                placeholder="Staff ke kaam, quality aur behaviour ke baare mein feedback likhein…"
+                placeholder="Write feedback about the staff member’s work, quality, and behaviour…"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 resize-none mb-3"
               />
               <div className="flex gap-2">

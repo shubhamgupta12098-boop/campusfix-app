@@ -2,10 +2,12 @@ services:
   - type: web
     name: campusfix-api
     runtime: node
-    rootDir: server
-    buildCommand: npm install
+    buildCommand: npm run render-build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
+      - key: NODE_VERSION
+        value: 20
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
@@ -26,15 +28,3 @@ services:
         sync: false
       - key: APP_NAME
         value: CampusFix CCMMS
-  - type: web
-    name: campusfix-web
-    runtime: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    envVars:
-      - key: VITE_API_URL
-        sync: false
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

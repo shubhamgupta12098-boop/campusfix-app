@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "server": "npm --prefix server run dev",
-    "install:all": "npm install && npm --prefix server install"
+    "install:all": "npm install && npm --prefix server install",
+    "start": "node server/src/index.js",
+    "render-build": "npm install && npm --prefix server install && npm run build"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
