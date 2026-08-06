@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import type { Profile, UserRole } from '@/lib/mongodb';
+import type { Profile, UserRole } from '@/lib/supabase';
 import { Users, Search, GraduationCap, BadgeCheck, Crown } from 'lucide-react';
 
 const ROLE_ICONS: Record<UserRole, typeof GraduationCap> = {
@@ -30,7 +30,7 @@ export function UserManagementScreen() {
   const load = async () => {
     setLoading(true);
     setError(null);
-    const { data, error: loadError } = await database.from('profiles').select('*').order('created_at', { ascending: false });
+    const { data, error: loadError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (loadError) setError(loadError.message);
     setUsers(((data || []) as Profile[]).map((u) => ({
       ...u,
@@ -42,13 +42,13 @@ export function UserManagementScreen() {
   };
 
   const toggleActive = async (user: Profile) => {
-    const { error: updateError } = await database.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+    const { error: updateError } = await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
     if (updateError) return setError(updateError.message);
     void load();
   };
 
   const changeRole = async (user: Profile, role: UserRole) => {
-    const { error: updateError } = await database.from('profiles').update({ role }).eq('id', user.id);
+    const { error: updateError } = await supabase.from('profiles').update({ role }).eq('id', user.id);
     if (updateError) return setError(updateError.message);
     void load();
   };

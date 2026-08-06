@@ -449,21 +449,9 @@ async function seedAdmin() {
 const mongoUri = String(process.env.MONGODB_URI || '').trim();
 
 function validateMongoUri(uri) {
-  if (!uri) throw new Error('MONGODB_URI is missing. Create server/.env or configure it in Render.');
+  if (!uri) throw new Error('MONGODB_URI is missing. Create server/.env with a valid MongoDB connection string (see MONGODB_SETUP.md).');
   if (!/^mongodb(?:\+srv)?:\/\//i.test(uri)) throw new Error('MONGODB_URI is not a valid MongoDB connection string.');
-  if (uri.includes('<db_password>') || uri.includes('YOUR_PASSWORD')) throw new Error('Replace the placeholder password in MONGODB_URI.');
-}
-
-
-// Serve the production web app from the same Render service. This removes
-// cross-origin configuration problems and lets the browser use /api directly.
-const webDist = path.resolve(__dirname, '../../dist');
-if (fs.existsSync(webDist)) {
-  app.use(express.static(webDist));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) return next();
-    res.sendFile(path.join(webDist, 'index.html'));
-  });
+  if (uri.includes('<db_password>') || uri.includes('YOUR_PASSWORD')) throw new Error('MONGODB_URI still contains a placeholder password. Replace it with your real Atlas database password.');
 }
 
 async function connectMongoDB() {
@@ -483,7 +471,7 @@ async function connectMongoDB() {
     const isSrvDnsError = /querySrv|ENOTFOUND|ECONNREFUSED|ETIMEOUT/i.test(message) && mongoUri.startsWith('mongodb+srv://');
     if (!isSrvDnsError) throw firstError;
 
-    console.warn('MongoDB SRV DNS lookup failed. Retrying with Google and Cloudflare DNS.');
+    console.warn('MongoDB SRV DNS lookup failed. Retrying with Google/Cloudflare DNS...');
     dns.setServers(['8.8.8.8', '1.1.1.1']);
     await mongoose.disconnect().catch(() => {});
     await mongoose.connect(mongoUri, options);
@@ -498,11 +486,11 @@ connectMongoDB().then(async () => {
   const message = String(err?.message || err);
   console.error('MongoDB connection failed:', message);
   if (/querySrv|ENOTFOUND|ECONNREFUSED|ETIMEOUT/i.test(message)) {
-    console.error('DNS issue: use 8.8.8.8 or 1.1.1.1, temporarily disable VPN/proxy, and restart the server.');
+    console.error('DNS issue: on Windows, set your network DNS to 8.8.8.8 and 1.1.1.1 in Settings > Network, temporarily turn off any VPN/proxy, then restart the server.');
   } else if (/bad auth|Authentication failed/i.test(message)) {
-    console.error('MongoDB authentication failed. Reset the Atlas database user password and run setup-mongodb.ps1 again.');
+    console.error('Username or password is incorrect. Reset the password in MongoDB Atlas > Database Access, update MONGODB_URI, and restart the server.');
   } else if (/IP.*access|not authorized|whitelist/i.test(message)) {
-    console.error('Add the current server IP address to MongoDB Atlas Network Access.');
+    console.error('Add your current IP address (or 0.0.0.0/0 for Render) in MongoDB Atlas > Network Access.');
   }
   process.exit(1);
 });

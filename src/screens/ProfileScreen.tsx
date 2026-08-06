@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, timeAgo } from '@/lib/constants';
-import type { Complaint, UserRole } from '@/lib/mongodb';
+import type { Complaint, UserRole } from '@/lib/supabase';
 import {
   User, Mail, Phone, Building2, Home, DoorOpen, BadgeCheck, Shield,
   Edit3, X, Save, ClipboardList, CheckCircle2, Clock, Star, Wrench,
@@ -59,7 +59,7 @@ export function ProfileScreen() {
   }, [darkMode]);
 
   const loadComplaints = async () => {
-    const { data } = await database
+    const { data } = await supabase
       .from('complaints')
       .select('*, complaint_categories(*)')
       .eq('user_id', profile?.id)
@@ -100,7 +100,7 @@ export function ProfileScreen() {
         phone: form.phone,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await database.from('profiles').update(profileUpdates).eq('id', profile?.id);
+      const { error } = await supabase.from('profiles').update(profileUpdates).eq('id', profile?.id);
       if (error) throw error;
       await refreshProfile();
       setSaveSuccess(true);

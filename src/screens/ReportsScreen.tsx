@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Spinner, StatCard } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
-import type { Complaint, ComplaintCategory, Building, Profile } from '@/lib/mongodb';
+import { downloadTextFile } from '@/lib/download';
+import type { Complaint, ComplaintCategory, Building, Profile } from '@/lib/supabase';
 import { Download, TrendingUp, Clock, CheckCircle2, AlertTriangle, FileBarChart } from 'lucide-react';
 
 export function ReportsScreen() {
@@ -19,13 +20,13 @@ export function ReportsScreen() {
   }, []);
 
   const load = async () => {
-    let complaintQuery = database.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').order('created_at', { ascending: false });
+    let complaintQuery = supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').order('created_at', { ascending: false });
     if (profile?.role === 'staff') complaintQuery = complaintQuery.eq('assigned_to', profile.id);
     const [c, cats, blds, techs] = await Promise.all([
       complaintQuery,
-      database.from('complaint_categories').select('*'),
-      database.from('buildings').select('*'),
-      database.from('profiles').select('*').eq('role', 'staff'),
+      supabase.from('complaint_categories').select('*'),
+      supabase.from('buildings').select('*'),
+      supabase.from('profiles').select('*').eq('role', 'staff'),
     ]);
     setComplaints((c.data || []) as unknown as Complaint[]);
     setCategories((cats.data || []) as ComplaintCategory[]);
@@ -72,7 +73,9 @@ export function ReportsScreen() {
     return { total, open, resolved, overdue, resolutionRate, avgResolutionHours, byCategory, byBuilding, byTechnician };
   }, [complaints, categories, buildings, technicians]);
 
-  const exportCSV = () => {
+  const [exporting, setExporting] = useState(false);
+
+  const exportCSV = async () => {
     const rows = [['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Building', 'Created', 'Resolved', 'Rating']];
     complaints.forEach((c) => {
       rows.push([
@@ -87,32 +90,16 @@ export function ReportsScreen() {
         c.feedback_rating?.toString() || '',
       ]);
     });
-    const escapeCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const csv = '\uFEFF' + rows.map((row) => row.map(escapeCell).join(',')).join('\r\n');
-    const filename = `complaints-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    const file = new File([csv], filename, { type: 'text/csv;charset=utf-8' });
-
-    const share = async () => {
-      try {
-        if (navigator.share && navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'CampusFix complaint report' });
-          return;
-        }
-      } catch (error) {
-        if ((error as DOMException)?.name === 'AbortError') return;
-      }
-
-      const url = URL.createObjectURL(file);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    };
-    void share();
+    const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    setExporting(true);
+    try {
+      await downloadTextFile(`complaints-report-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv');
+    } catch (error) {
+      console.error('CSV export failed:', error);
+      alert('Could not export the report. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) return <Spinner />;
@@ -125,9 +112,9 @@ export function ReportsScreen() {
         title={profile?.role === 'staff' ? 'My Reports' : 'Reports & Analytics'}
         subtitle={profile?.role === 'staff' ? 'Only your assigned and completed work is shown' : 'Insights into campus maintenance performance'}
         action={
-          <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-lg transition-all">
+          <button onClick={exportCSV} disabled={exporting} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-lg transition-all disabled:opacity-60">
             <Download className="w-4 h-4" />
-            Export CSV
+            {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
         }
       />

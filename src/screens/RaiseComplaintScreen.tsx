@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { uploadDataUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card } from '@/components/ui';
 import { PRIORITY_CONFIG } from '@/lib/constants';
-import type { ComplaintPriority } from '@/lib/mongodb';
+import type { ComplaintPriority } from '@/lib/supabase';
 import { Camera, X, MapPin, Send, AlertCircle } from 'lucide-react';
 
 const FIXED_CATEGORIES = [
@@ -106,7 +106,7 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
       return;
     }
 
-    const result = await database.from('complaints').insert({
+    const result = await supabase.from('complaints').insert({
       complaint_no: complaintNo,
       title: title.trim(),
       description: description.trim(),
@@ -130,7 +130,7 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
     }
 
     const complaintId = (result.data as { id: string }).id;
-    await database.from('complaint_status_history').insert({
+    await supabase.from('complaint_status_history').insert({
       complaint_id: complaintId,
       old_status: null,
       new_status: 'submitted',
@@ -140,7 +140,7 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
 
     // Notifications must never block complaint filing.
     try {
-      await database.from('notifications').insert({
+      await supabase.from('notifications').insert({
         user_id: profile.id,
         title: 'Complaint Submitted',
         message: `${complaintNo} has been submitted successfully.`,
@@ -148,9 +148,9 @@ export function RaiseComplaintScreen({ onDone }: { onDone: () => void }) {
         related_id: complaintId,
         is_read: false,
       });
-      const admins = await database.from('profiles').select('id').in('role', ['staff', 'admin']);
+      const admins = await supabase.from('profiles').select('id').in('role', ['staff', 'admin']);
       if (admins.data && (admins.data as { id: string }[]).length) {
-        await database.from('notifications').insert((admins.data as { id: string }[]).map((a) => ({
+        await supabase.from('notifications').insert((admins.data as { id: string }[]).map((a) => ({
           user_id: a.id,
           title: 'New Complaint Submitted',
           message: `${complaintNo}: ${title.trim()} — ${selectedCat.name}`,

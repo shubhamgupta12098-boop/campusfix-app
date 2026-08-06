@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, StatCard, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
-import type { Complaint, ComplaintCategory, Building, Profile } from '@/lib/mongodb';
+import type { Complaint, ComplaintCategory, Building, Profile } from '@/lib/supabase';
 import {
   ClipboardList,
   CheckCircle2,
@@ -50,9 +50,9 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
     setError(null);
     try {
       const [catRes, bldRes, profileRes] = await Promise.all([
-        database.from('complaint_categories').select('*').order('name'),
-        database.from('buildings').select('*').order('name'),
-        isAdmin ? database.from('profiles').select('*').order('full_name') : Promise.resolve({ data: [], error: null }),
+        supabase.from('complaint_categories').select('*').order('name'),
+        supabase.from('buildings').select('*').order('name'),
+        isAdmin ? supabase.from('profiles').select('*').order('full_name') : Promise.resolve({ data: [], error: null }),
       ]);
 
       const firstError = catRes.error || bldRes.error || profileRes.error;
@@ -67,7 +67,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }: Props) {
         is_active: p.is_active !== false,
       })));
 
-      let query = database
+      let query = supabase
         .from('complaints')
         .select('*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
         .order('created_at', { ascending: false });

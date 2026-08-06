@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
-import type { Complaint, ComplaintStatus } from '@/lib/mongodb';
+import type { Complaint, ComplaintStatus } from '@/lib/supabase';
 import { ClipboardList, Search, Wrench, Filter } from 'lucide-react';
 
 export function MyComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -22,7 +22,7 @@ export function MyComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: 
     if (!profile?.id) return;
     setLoading(true);
     setLoadError(null);
-    const { data, error } = await database
+    const { data, error } = await supabase
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*)')
       .eq('user_id', profile.id)

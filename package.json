@@ -10,14 +10,14 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "server": "npm --prefix server run dev",
-    "install:all": "npm install && npm --prefix server install",
-    "start": "node server/src/index.js",
-    "render-build": "npm install && npm --prefix server install && npm run build"
+    "install:all": "npm install && npm --prefix server install"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

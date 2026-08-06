@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
-import type { Complaint, ComplaintStatus } from '@/lib/mongodb';
+import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
+import type { Complaint, ComplaintStatus } from '@/lib/supabase';
 import { Wrench, Clock, MapPin, CheckCircle2, Play, Pause, Camera, X, AlertCircle, Image, FileText, Tag } from 'lucide-react';
 
 export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -30,7 +30,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (!profile?.id) { setComplaints([]); setLoading(false); return; }
     setLoading(true);
     setWorkError('');
-    const { data, error } = await database
+    const { data, error } = await supabase
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*)')
       .eq('assigned_to', profile.id)
@@ -62,7 +62,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     setActiveWorkOrderId(null);
     setWorkModal(c);
     setLoadingWorkOrder(true);
-    const { data } = await database
+    const { data } = await supabase
       .from('work_orders')
       .select('*')
       .eq('complaint_id', c.id)
@@ -109,9 +109,9 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     try {
       const updates: any = { status: 'in_progress', updated_at: new Date().toISOString() };
       if (!startModal.assigned_at) updates.assigned_at = new Date().toISOString();
-      await database.from('complaints').update(updates).eq('id', startModal.id);
+      await supabase.from('complaints').update(updates).eq('id', startModal.id);
 
-      await database.from('work_orders').insert({
+      await supabase.from('work_orders').insert({
         complaint_id: startModal.id,
         technician_id: profile?.id,
         work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -126,7 +126,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
         created_by: profile?.id,
       });
 
-      await database.from('complaint_status_history').insert({
+      await supabase.from('complaint_status_history').insert({
         complaint_id: startModal.id,
         old_status: startModal.status,
         new_status: 'in_progress',
@@ -134,7 +134,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
         remarks: 'Work started — before-repair photo captured',
       });
 
-      await database.from('notifications').insert({
+      await supabase.from('notifications').insert({
         user_id: startModal.user_id,
         title: 'Work Started',
         message: `${startModal.title} — Staff has started work on your complaint.`,
@@ -154,7 +154,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (!workModal) return;
     if (completionPhotos.length < 1) { setWorkError('At least one after-repair photo is required.'); return; }
     if (!repairNotes.trim()) { setWorkError('Completion remarks are required.'); return; }
-    await database.from('complaints').update({
+    await supabase.from('complaints').update({
       status: 'waiting_approval',
       updated_at: new Date().toISOString(),
     }).eq('id', workModal.id);
@@ -162,7 +162,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
     if (activeWorkOrderId) {
       // Update the same work order that was opened at "Start Work" time so
       // the before photo captured then stays attached to this job.
-      await database.from('work_orders').update({
+      await supabase.from('work_orders').update({
         repair_notes: repairNotes.trim(),
         completion_photo_urls: completionPhotos,
         completion_time: new Date().toISOString(),
@@ -171,7 +171,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       }).eq('id', activeWorkOrderId);
     } else {
       // Fallback for older jobs that don't have a work order yet.
-      await database.from('work_orders').insert({
+      await supabase.from('work_orders').insert({
         complaint_id: workModal.id,
         technician_id: profile?.id,
         work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -189,7 +189,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       });
     }
 
-    await database.from('complaint_status_history').insert({
+    await supabase.from('complaint_status_history').insert({
       complaint_id: workModal.id,
       old_status: workModal.status,
       new_status: 'waiting_approval',
@@ -197,7 +197,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       remarks: repairNotes || 'Job completed',
     });
 
-    await database.from('notifications').insert({
+    await supabase.from('notifications').insert({
       user_id: workModal.user_id,
       title: 'Work Submitted for Approval',
       message: `${workModal.title} — Staff has submitted completion evidence for admin verification.`,
@@ -205,8 +205,8 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
       related_id: workModal.id,
     });
 
-    const admins = await database.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
-    await Promise.all(((admins.data || []) as any[]).map((admin) => database.from('notifications').insert({
+    const admins = await supabase.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
+    await Promise.all(((admins.data || []) as any[]).map((admin) => supabase.from('notifications').insert({
       user_id: admin.id,
       title: 'Work Approval Required',
       message: `${workModal.title} has been submitted by ${profile?.full_name || 'staff'}.`,
@@ -263,7 +263,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                 <div className="flex items-start gap-3">
                   {c.photo_urls && c.photo_urls.length > 0 ? (
                     <button onClick={() => onOpenComplaint(c.id)} className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-slate-200">
-                      <img src={c.photo_urls[0]} alt={c.title} className="w-full h-full object-cover" />
+                      <img src={c.photo_urls[0]} alt={c.title} className="w-full h-full object-cover" onError={onImageError} />
                     </button>
                   ) : (
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: (c.complaint_categories?.color || '#3B82F6') + '15' }}>
@@ -348,7 +348,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                   <div className="flex gap-2 overflow-x-auto">
                     {startModal.photo_urls.map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noreferrer" className="w-20 h-20 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
-                        <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" />
+                        <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError} />
                       </a>
                     ))}
                   </div>
@@ -364,7 +364,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                   </div>
                   <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => void handlePhotoUpload(e, 'before')} />
                 </label>
-                {beforePhotos.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{beforePhotos.map((url, i) => <div key={url} className="relative"><img src={url} alt={`Before repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200"/><button type="button" onClick={() => setBeforePhotos(v => v.filter((_, index) => index !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div>}
+                {beforePhotos.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{beforePhotos.map((url, i) => <div key={url} className="relative"><img src={url} alt={`Before repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200" onError={onImageError}/><button type="button" onClick={() => setBeforePhotos(v => v.filter((_, index) => index !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div>}
               </div>
 
               {workError && <p className="text-xs text-red-600 mt-3">{workError}</p>}
@@ -393,7 +393,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                   <div className="flex gap-2 overflow-x-auto">
                     {workModal.photo_urls.map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
-                        <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" />
+                        <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError} />
                       </a>
                     ))}
                   </div>
@@ -407,7 +407,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                   {loadingWorkOrder ? (
                     <p className="text-xs text-slate-400">Loading…</p>
                   ) : beforePhotos.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">{beforePhotos.map((url, i) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Before repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200"/></a>)}</div>
+                    <div className="flex flex-wrap gap-2">{beforePhotos.map((url, i) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Before repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200" onError={onImageError}/></a>)}</div>
                   ) : (
                     <p className="text-xs text-slate-400">No before photo was captured for this job.</p>
                   )}
@@ -421,7 +421,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }: { onOpenComplaint: (id
                     </div>
                     <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => void handlePhotoUpload(e, 'after')} />
                   </label>
-                  {completionPhotos.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{completionPhotos.map((url, i) => <div key={url} className="relative"><img src={url} alt={`After repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200"/><button type="button" onClick={() => setCompletionPhotos(v => v.filter((_, index) => index !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div>}
+                  {completionPhotos.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{completionPhotos.map((url, i) => <div key={url} className="relative"><img src={url} alt={`After repair ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200" onError={onImageError}/><button type="button" onClick={() => setCompletionPhotos(v => v.filter((_, index) => index !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center"><X className="w-3 h-3"/></button></div>)}</div>}
                 </div>
               </div>
               {workError && <p className="text-xs text-red-600 mt-3">{workError}</p>}

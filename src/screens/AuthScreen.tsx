@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
-import type { UserRole } from '@/lib/mongodb';
+import type { UserRole } from '@/lib/supabase';
 import { GraduationCap, BadgeCheck, Wrench, Mail, Lock, User, Phone, Building2, Home, DoorOpen, X, KeyRound, CheckCircle2 } from 'lucide-react';
 
 // Admin accounts are never offered on public signup — an existing admin

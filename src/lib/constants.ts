@@ -1,4 +1,27 @@
-import type { ComplaintStatus, ComplaintPriority } from '@/lib/mongodb';
+import type { ComplaintStatus, ComplaintPriority } from '@/lib/supabase';
+import type { SyntheticEvent } from 'react';
+
+// Neutral "image unavailable" placeholder shown when a photo URL fails to load
+// (e.g. the file was uploaded before the MongoDB/GridFS storage fix and no
+// longer exists). Keeps the UI clean instead of showing the browser's broken-image icon.
+export const BROKEN_IMAGE_FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#f1f5f9"/>
+    <path d="M30 65 L42 50 L52 60 L66 42 L74 65 Z" fill="#cbd5e1"/>
+    <circle cx="38" cy="38" r="6" fill="#cbd5e1"/>
+    <rect x="20" y="20" width="60" height="60" rx="6" fill="none" stroke="#cbd5e1" stroke-width="3"/>
+  </svg>`
+);
+
+// Attach as onError={onImageError} to any <img src=...> that points at a user-uploaded
+// photo. Swaps in the placeholder once, so a dead link can't loop retry requests forever.
+export function onImageError(e: SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.dataset.fallbackApplied) return;
+  img.dataset.fallbackApplied = 'true';
+  img.src = BROKEN_IMAGE_FALLBACK;
+  img.classList.add('p-4', 'opacity-60');
+}
 
 export const STATUS_CONFIG: Record<ComplaintStatus, { label: string; color: string; bg: string; dot: string }> = {
   submitted: { label: 'Submitted', color: 'text-slate-700', bg: 'bg-slate-100', dot: 'bg-slate-500' },

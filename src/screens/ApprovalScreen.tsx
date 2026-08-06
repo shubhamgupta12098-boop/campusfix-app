@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import type { Complaint, WorkOrder } from '@/lib/mongodb';
+import { onImageError } from '@/lib/constants';
+import type { Complaint, WorkOrder } from '@/lib/supabase';
 import { CheckCircle2, XCircle, Image, ShieldCheck, User, MapPin, Mail, Phone } from 'lucide-react';
 
 export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -14,7 +15,7 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
 
   const load = async () => {
     setLoading(true);
-    const { data } = await database
+    const { data } = await supabase
       .from('work_orders')
       .select('*, profiles!work_orders_technician_id_fkey(*), complaints(*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*))')
       .eq('approval_status', 'pending')
@@ -27,7 +28,7 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
   const decide = async (wo: WorkOrder, approved: boolean) => {
     setBusy(wo.id);
     const note = remarks[wo.id]?.trim() || (approved ? 'Work verified and approved by admin.' : 'Work rejected. Please fix the issue and submit again.');
-    await database.from('work_orders').update({
+    await supabase.from('work_orders').update({
       approval_status: approved ? 'approved' : 'rejected',
       approval_remarks: note,
       approved_by: profile?.id,
@@ -35,16 +36,16 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
       status: approved ? 'completed' : 'rework_required',
     }).eq('id', wo.id);
     const complaint = wo.complaints || await (async () => {
-      const r = await database.from('complaints').select('*').eq('id', wo.complaint_id).maybeSingle();
+      const r = await supabase.from('complaints').select('*').eq('id', wo.complaint_id).maybeSingle();
       return r.data as Complaint | null;
     })();
     if (complaint) {
-      await database.from('complaints').update({
+      await supabase.from('complaints').update({
         status: approved ? 'closed' : 'in_progress',
         closed_at: approved ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       }).eq('id', complaint.id);
-      await database.from('complaint_status_history').insert({
+      await supabase.from('complaint_status_history').insert({
         complaint_id: complaint.id,
         old_status: 'waiting_approval',
         new_status: approved ? 'closed' : 'in_progress',
@@ -53,8 +54,8 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
         remarks: note,
       });
       await Promise.all([
-        database.from('notifications').insert({ user_id: complaint.user_id, title: approved ? 'Complaint Closed' : 'Work Sent Back', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }),
-        wo.technician_id ? database.from('notifications').insert({ user_id: wo.technician_id, title: approved ? 'Complaint Closed' : 'Rework Required', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }) : Promise.resolve(null),
+        supabase.from('notifications').insert({ user_id: complaint.user_id, title: approved ? 'Complaint Closed' : 'Work Sent Back', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }),
+        wo.technician_id ? supabase.from('notifications').insert({ user_id: wo.technician_id, title: approved ? 'Complaint Closed' : 'Rework Required', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }) : Promise.resolve(null),
       ]);
     }
     setBusy(null);
@@ -88,7 +89,7 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {wo.complaints.photo_urls.map((url, i) => (
                         <a key={i} href={url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
-                          <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError} />
                         </a>
                       ))}
                     </div>
@@ -98,8 +99,8 @@ export function ApprovalScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
             )}
             <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-xl mt-3"><span className="font-semibold">Staff remarks:</span> {wo.repair_notes || 'No completion remarks supplied.'}</p>
             <div className="mt-3 grid sm:grid-cols-2 gap-4">
-              <div><p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1"><Image className="w-3.5 h-3.5"/>Before repair</p><div className="flex flex-wrap gap-2">{(wo.before_photo_urls || []).length === 0 ? <p className="text-xs text-slate-400">Not provided</p> : (wo.before_photo_urls || []).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Before repair ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-200" /></a>)}</div></div>
-              <div><p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1"><Image className="w-3.5 h-3.5"/>After repair <span className="text-red-600">*</span></p><div className="flex flex-wrap gap-2">{(wo.completion_photo_urls || []).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`After repair ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-200" /></a>)}</div></div>
+              <div><p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1"><Image className="w-3.5 h-3.5"/>Before repair</p><div className="flex flex-wrap gap-2">{(wo.before_photo_urls || []).length === 0 ? <p className="text-xs text-slate-400">Not provided</p> : (wo.before_photo_urls || []).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Before repair ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-200" onError={onImageError} /></a>)}</div></div>
+              <div><p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1"><Image className="w-3.5 h-3.5"/>After repair <span className="text-red-600">*</span></p><div className="flex flex-wrap gap-2">{(wo.completion_photo_urls || []).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`After repair ${i + 1}`} className="w-24 h-24 object-cover rounded-xl border border-slate-200" onError={onImageError} /></a>)}</div></div>
             </div>
           </div>
           <div className="lg:w-80">

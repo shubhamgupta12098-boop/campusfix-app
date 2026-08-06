@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Star, MessageSquare, CheckCircle2, Clock } from 'lucide-react';
-import { database, type Complaint } from '@/lib/mongodb';
+import { supabase, type Complaint } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { Card, EmptyState, Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
@@ -15,7 +15,7 @@ export function FeedbackScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
   useEffect(() => { void load(); }, [profile?.id, profile?.role]);
   const load = async () => {
     setLoading(true); setError('');
-    let query = database.from('complaints').select('*, profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)').order('updated_at', { ascending: false });
+    let query = supabase.from('complaints').select('*, profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)').order('updated_at', { ascending: false });
     if (!isAdmin && profile?.id) query = query.eq('user_id', profile.id);
     const { data, error: e } = await query;
     if (e) setError(e.message); else setComplaints((data || []) as unknown as Complaint[]);
@@ -30,7 +30,7 @@ export function FeedbackScreen({ onOpenComplaint }: { onOpenComplaint: (id: stri
 
   if (loading) return <Spinner />;
   return <div className="max-w-5xl mx-auto space-y-5">
-    <div><h1 className="text-2xl font-bold text-slate-900">{isAdmin ? 'Student Feedback & Ratings' : 'Feedback & Ratings'}</h1><p className="text-sm text-slate-500 mt-1">{isAdmin ? 'Review student ratings for completed work.' : 'Rate resolved complaints and review your submitted feedback.'}</p></div>
+    <div><h1 className="text-2xl font-bold text-slate-900">{isAdmin ? 'Student Feedback & Ratings' : 'Feedback & Ratings'}</h1><p className="text-sm text-slate-500 mt-1">{isAdmin ? 'View student ratings for completed work.' : 'Rate your resolved complaints and review the feedback you have submitted.'}</p></div>
     {isAdmin && <div className="grid sm:grid-cols-2 gap-4"><Card className="p-5"><p className="text-xs text-slate-500">Average Rating</p><p className="text-3xl font-bold mt-1 flex items-center gap-2">{average}<Star className="w-6 h-6 fill-amber-400 text-amber-400"/></p></Card><Card className="p-5"><p className="text-xs text-slate-500">Total Feedback</p><p className="text-3xl font-bold mt-1">{rows.filter(c=>c.feedback_rating).length}</p></Card></div>}
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
     {!rows.length ? <Card className="p-8"><EmptyState icon={MessageSquare} title="No feedback yet" description={isAdmin ? 'Student ratings yahan dikhengi.' : 'Resolved complaint hone ke baad rating option yahan milega.'}/></Card> :

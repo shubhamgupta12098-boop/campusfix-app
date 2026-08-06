@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { database } from '@/lib/mongodb';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate } from '@/lib/constants';
-import type { Complaint, Profile, Technician } from '@/lib/mongodb';
+import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
+import type { Complaint, Profile, Technician } from '@/lib/supabase';
 import { ClipboardList, Wrench, MapPin, User, Clock, X, Send, Image } from 'lucide-react';
 
 export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (id: string) => void }) {
@@ -25,8 +25,8 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
     setError('');
     try {
     const [c, t] = await Promise.all([
-      database.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
-      database.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
+      supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
     ]);
     if (c.error) throw new Error(c.error.message);
     if (t.error) throw new Error(t.error.message);
@@ -42,11 +42,11 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
   };
 
   const verify = async (c: Complaint) => {
-    await database.from('complaints').update({ status: 'verified', updated_at: new Date().toISOString() }).eq('id', c.id);
-    await database.from('complaint_status_history').insert({
+    await supabase.from('complaints').update({ status: 'verified', updated_at: new Date().toISOString() }).eq('id', c.id);
+    await supabase.from('complaint_status_history').insert({
       complaint_id: c.id, old_status: c.status, new_status: 'verified', changed_by: profile?.id, remarks: 'Complaint verified',
     });
-    await database.from('notifications').insert({
+    await supabase.from('notifications').insert({
       user_id: c.user_id, title: 'Complaint Verified', message: `${c.title} has been verified and is pending assignment.`, type: 'status_changed', related_id: c.id,
     });
     void load();
@@ -58,19 +58,19 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
     setError('');
     try {
     const chosenStaff = technicians.find((t) => t.id === selectedTech);
-    const updateResult = await database.from('complaints').update({
+    const updateResult = await supabase.from('complaints').update({
       status: 'assigned', assigned_to: selectedTech, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq('id', assignModal.id);
     if (updateResult.error) throw new Error(updateResult.error.message);
-    await database.from('complaint_status_history').insert({
+    await supabase.from('complaint_status_history').insert({
       complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: `Assigned to ${chosenStaff?.full_name || 'staff'}`,
     });
-    await database.from('notifications').insert([
+    await supabase.from('notifications').insert([
       { user_id: selectedTech, title: 'New Job Assigned', message: assignModal.title, type: 'assigned', related_id: assignModal.id },
       { user_id: assignModal.user_id, title: 'Technician Assigned', message: `${assignModal.title} — a technician has been assigned.`, type: 'assigned', related_id: assignModal.id },
     ]);
     // Update technician workload
-    await database.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
+    await supabase.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
     setAssignModal(null);
     setSelectedTech('');
     await load();
@@ -107,7 +107,7 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
                 <div className="flex items-start gap-3">
                   {c.photo_urls && c.photo_urls.length > 0 ? (
                     <button onClick={() => onOpenComplaint(c.id)} className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-slate-200">
-                      <img src={c.photo_urls[0]} alt={c.title} className="w-full h-full object-cover" />
+                      <img src={c.photo_urls[0]} alt={c.title} className="w-full h-full object-cover" onError={onImageError} />
                     </button>
                   ) : (
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: (c.complaint_categories?.color || '#3B82F6') + '15' }}>
@@ -166,7 +166,7 @@ export function AssignComplaintsScreen({ onOpenComplaint }: { onOpenComplaint: (
                 <div className="flex gap-2 mb-4 overflow-x-auto">
                   {assignModal.photo_urls.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
-                      <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" />
+                      <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError} />
                     </a>
                   ))}
                 </div>
