@@ -127,11 +127,59 @@ const mailTransport = () => {
   return nodemailer.createTransport({
     ...(gmail ? { service: 'gmail' } : { host }),
     port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+    secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
     auth: { user: String(user).trim(), pass },
     tls: { rejectUnauthorized: false },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 20_000,
   });
 };
+
+// Render free services cannot reliably connect to traditional SMTP ports.
+// Prefer Resend's HTTPS API (port 443), then fall back to SMTP for local/paid hosting.
+async function sendTransactionalEmail({ to, subject, text, html }) {
+  const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
+  if (resendApiKey) {
+    const productName = process.env.APP_NAME || 'CampusFix CCMMS';
+    const from = String(process.env.RESEND_FROM || process.env.MAIL_FROM || `${productName} <onboarding@resend.dev>`).trim();
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'CampusFix/1.0',
+      },
+      body: JSON.stringify({ from, to: [to], subject, text, html }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = payload?.message || payload?.error || `Resend request failed with status ${response.status}`;
+      const error = new Error(message);
+      error.code = payload?.name || payload?.statusCode || response.status;
+      throw error;
+    }
+    return { provider: 'resend', id: payload?.id };
+  }
+
+  const transport = mailTransport();
+  if (!transport) {
+    const error = new Error('No email provider is configured. Add RESEND_API_KEY or SMTP settings.');
+    error.code = 'EMAIL_NOT_CONFIGURED';
+    throw error;
+  }
+  const productName = process.env.APP_NAME || 'CampusFix CCMMS';
+  const info = await transport.sendMail({
+    from: process.env.MAIL_FROM || `${productName} <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    text,
+    html,
+  });
+  return { provider: 'smtp', id: info.messageId };
+}
 
 const toPublic = (doc) => {
   const obj = doc?.toObject ? doc.toObject() : { ...doc };
@@ -269,12 +317,6 @@ app.post('/api/auth/password-reset', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.json(generic);
 
-    const transport = mailTransport();
-    if (!transport) {
-      console.error('Password reset email is unavailable: SMTP environment variables are missing.');
-      return res.status(503).json({ error: 'Password reset email is temporarily unavailable. Please contact the administrator.' });
-    }
-
     await PasswordResetToken.deleteMany({ user_id: user.profile_id, used_at: null });
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -293,8 +335,7 @@ app.post('/api/auth/password-reset', async (req, res) => {
     const resetUrl = `${clientUrl}/?resetToken=${encodeURIComponent(rawToken)}`;
     const productName = process.env.APP_NAME || 'CampusFix CCMMS';
 
-    await transport.sendMail({
-      from: process.env.MAIL_FROM || `${productName} <${process.env.SMTP_USER}>`,
+    await sendTransactionalEmail({
       to: email,
       subject: `Reset your ${productName} password`,
       text: [
@@ -327,9 +368,20 @@ app.post('/api/auth/password-reset', async (req, res) => {
     if (createdTokenId) await PasswordResetToken.deleteOne({ _id: createdTokenId }).catch(() => {});
     console.error('Password reset email error:', e);
     const raw = String(e?.message || e);
-    const error = /535|BadCredentials|Username and Password not accepted|Invalid login/i.test(raw)
-      ? 'The email service rejected its credentials. Configure SMTP_USER and a valid email app password in Render.'
-      : 'The password reset email could not be sent. Please try again later.';
+    let error = 'The password reset email could not be sent. Please try again later.';
+    if (e?.code === 'EMAIL_NOT_CONFIGURED') {
+      error = 'Password reset email is not configured. Add RESEND_API_KEY in Render.';
+    } else if (/validation_error|invalid_from_address|domain.*verif|from.*verif/i.test(raw)) {
+      error = 'The sender address is not verified. Configure RESEND_FROM with a verified sender in Resend.';
+    } else if (/restricted|testing emails|only send.*your own/i.test(raw)) {
+      error = 'Resend test mode can only email the Resend account address. Verify a domain to email other users.';
+    } else if (/401|403|invalid.*api.*key|missing_api_key/i.test(raw)) {
+      error = 'The email API key was rejected. Check RESEND_API_KEY in Render.';
+    } else if (/535|BadCredentials|Username and Password not accepted|Invalid login/i.test(raw)) {
+      error = 'The SMTP service rejected its credentials.';
+    } else if (/ETIMEDOUT|Connection timeout/i.test(raw)) {
+      error = 'The email connection timed out. On Render Free, configure RESEND_API_KEY instead of Gmail SMTP.';
+    }
     res.status(500).json({ error });
   }
 });

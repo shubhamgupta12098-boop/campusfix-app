@@ -38,12 +38,9 @@ Set these environment variables in the Render dashboard (Environment tab):
 MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@your-cluster.mongodb.net/campusfix?retryWrites=true&w=majority
 JWT_SECRET=<let Render auto-generate this>
 CLIENT_URL=https://campusfix-web.onrender.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-gmail-address@gmail.com
-SMTP_PASS=your-16-character-gmail-app-password
-MAIL_FROM=CampusFix CCMMS <your-gmail-address@gmail.com>
+RESEND_API_KEY=re_your_resend_api_key
+RESEND_FROM=CampusFix CCMMS <onboarding@resend.dev>
+MAIL_FROM=CampusFix CCMMS <onboarding@resend.dev>
 APP_NAME=CampusFix CCMMS
 ADMIN_EMAIL=admin@campusfix.local
 ADMIN_PASSWORD=<set a real password>
@@ -53,17 +50,22 @@ Notes:
 - `CLIENT_URL` must be your **frontend's** URL (the static site), not the API's own URL.
   If you have more than one frontend URL (custom domain + the onrender.com one),
   separate them with commas.
-- `render.yaml` marks `MONGODB_URI`, `CLIENT_URL`, `SMTP_USER`, `SMTP_PASS` and
-  `MAIL_FROM` as `sync: false` — Render does **not** fill these in automatically.
-  You must type them into the dashboard yourself, or the API will fail to start
-  (bad `MONGODB_URI`) or password-reset emails will never send (missing SMTP vars).
+- `render.yaml` marks `MONGODB_URI`, `CLIENT_URL`, and `RESEND_API_KEY` as
+  `sync: false`. Enter them in Render's Environment tab.
 
-### Create a Gmail App Password (for SMTP_PASS)
-1. Turn on 2-Step Verification for the Gmail account you're sending from.
-2. Google Account → Security → App passwords → create one for "CampusFix".
-3. Copy the 16-character code into `SMTP_PASS` with no spaces. Do not use your
-   normal Gmail password — Gmail will reject it (that's the `535`/`BadCredentials`
-   error you'd see in the server logs).
+### Configure password-reset email with Resend
+1. Create a Resend account and generate an API key.
+2. Put the key in Render as `RESEND_API_KEY`.
+3. For the first test, keep `RESEND_FROM=CampusFix CCMMS <onboarding@resend.dev>`.
+   In Resend test mode, send the reset email to the same address used for the
+   Resend account.
+4. To send to all registered users, verify your own domain in Resend and change
+   `RESEND_FROM` to an address on that domain, for example
+   `CampusFix CCMMS <no-reply@yourdomain.com>`.
+
+The backend uses Resend over HTTPS, so it works on Render Free without the
+Gmail SMTP `ETIMEDOUT` problem. SMTP remains an optional fallback for local or
+paid hosting.
 
 ### Verify the backend is actually running
 Open `https://campusfix-api.onrender.com/api/health` in a browser. You should see:
