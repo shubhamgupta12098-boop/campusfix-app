@@ -58,13 +58,13 @@ export function ResetPasswordScreen({ oobCode, onDone }: { oobCode: string; onDo
           <BrandLogo className="w-12 h-12 rounded-xl" />
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Set new password</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Firebase verifies the reset link; your new password is then saved in MongoDB.</p>
+            <p className="text-sm text-slate-500 mt-0.5">Verify the reset link and choose a new password.</p>
           </div>
         </div>
 
         {checking && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 flex items-center gap-3">
-            <KeyRound className="w-5 h-5 text-blue-600" /> Checking your Firebase reset link…
+            <KeyRound className="w-5 h-5 text-blue-600" /> Checking your password reset link…
           </div>
         )}
 
