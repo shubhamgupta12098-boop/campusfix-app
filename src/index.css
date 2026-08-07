@@ -13,3 +13,8 @@ html.dark .text-slate-600, html.dark .text-slate-500 { color:#9fb0c6 !important;
 html.dark .border-slate-100, html.dark .border-slate-200 { border-color:#263b55 !important; }
 html.dark .hover\:bg-slate-50:hover { background-color:#172941 !important; }
 html.dark input, html.dark textarea, html.dark select { background-color:#0b1729 !important; color:#f8fafc !important; border-color:#2b405a !important; }
+
+/* Use a separate dark-background logo asset so the JPEG's white background
+   does not stay bright when the user enables the app's class-based dark mode. */
+.brand-logo { background-image: url('/cmms-logo.jpeg'); }
+html.dark .brand-logo { background-image: url('/cmms-logo-dark.png'); background-color:#020617; }

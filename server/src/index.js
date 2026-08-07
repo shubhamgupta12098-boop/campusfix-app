@@ -10,7 +10,6 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dns from 'node:dns';
 import crypto from 'node:crypto';
-import nodemailer from 'nodemailer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../uploads');
@@ -24,7 +23,9 @@ const app = express();
 // why uploaded images don't show up once deployed on Render.
 app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT || 5000);
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+const JWT_SECRET = String(process.env.JWT_SECRET || (IS_PRODUCTION ? '' : 'local-dev-only-secret')).trim();
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required in production. Add it in Render Environment settings.');
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
   .map(v => v.trim())
@@ -111,74 +112,70 @@ const User = mongoose.model('auth_users', new mongoose.Schema({
   profile_id: { type: String, required: true }
 }, { timestamps: true, versionKey: false }), 'auth_users');
 
-const PasswordResetToken = mongoose.model('password_reset_tokens', new mongoose.Schema({
-  user_id: { type: String, required: true, index: true },
-  token_hash: { type: String, required: true, unique: true, index: true },
-  expires_at: { type: Date, required: true, index: { expires: 0 } },
-  used_at: { type: Date, default: null }
-}, { timestamps: true, versionKey: false }), 'password_reset_tokens');
+const FIREBASE_WEB_API_KEY = String(process.env.FIREBASE_WEB_API_KEY || '').trim();
 
-const mailTransport = () => {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
-  if (!host || !user || !pass) return null;
-  const gmail = /gmail\.com$/i.test(host);
-  return nodemailer.createTransport({
-    ...(gmail ? { service: 'gmail' } : { host }),
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
-    auth: { user: String(user).trim(), pass },
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 15_000,
-    greetingTimeout: 15_000,
-    socketTimeout: 20_000,
-  });
-};
+function firebaseErrorCode(payload) {
+  const raw = String(payload?.error?.message || payload?.message || 'FIREBASE_AUTH_ERROR');
+  return raw.split(' : ')[0].trim();
+}
 
-// Render free services cannot reliably connect to traditional SMTP ports.
-// Prefer Resend's HTTPS API (port 443), then fall back to SMTP for local/paid hosting.
-async function sendTransactionalEmail({ to, subject, text, html }) {
-  const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-  if (resendApiKey) {
-    const productName = process.env.APP_NAME || 'CampusFix CCMMS';
-    const from = String(process.env.RESEND_FROM || process.env.MAIL_FROM || `${productName} <onboarding@resend.dev>`).trim();
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'CampusFix/1.0',
-      },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
-      signal: AbortSignal.timeout(20_000),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = payload?.message || payload?.error || `Resend request failed with status ${response.status}`;
-      const error = new Error(message);
-      error.code = payload?.name || payload?.statusCode || response.status;
-      throw error;
-    }
-    return { provider: 'resend', id: payload?.id };
-  }
-
-  const transport = mailTransport();
-  if (!transport) {
-    const error = new Error('No email provider is configured. Add RESEND_API_KEY or SMTP settings.');
-    error.code = 'EMAIL_NOT_CONFIGURED';
+async function firebaseAuthRequest(endpoint, body) {
+  if (!FIREBASE_WEB_API_KEY) {
+    const error = new Error('Firebase password reset is not configured. Add FIREBASE_WEB_API_KEY in Render.');
+    error.code = 'FIREBASE_NOT_CONFIGURED';
     throw error;
   }
-  const productName = process.env.APP_NAME || 'CampusFix CCMMS';
-  const info = await transport.sendMail({
-    from: process.env.MAIL_FROM || `${productName} <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
-  return { provider: 'smtp', id: info.messageId };
+
+  let response;
+  try {
+    response = await fetch(`https://identitytoolkit.googleapis.com/v1/${endpoint}?key=${encodeURIComponent(FIREBASE_WEB_API_KEY)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (cause) {
+    const error = new Error('Could not reach Firebase Authentication. Please try again.');
+    error.code = 'FIREBASE_UNREACHABLE';
+    error.cause = cause;
+    throw error;
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(firebaseErrorCode(payload));
+    error.code = firebaseErrorCode(payload);
+    throw error;
+  }
+  return payload;
+}
+
+async function ensureFirebaseRecoveryUser(email) {
+  try {
+    // Firebase is used only as the forgotten-password recovery service. App
+    // signup/login/session/data remain MongoDB-backed. Existing MongoDB users
+    // are lazily mirrored here only when they request a reset.
+    await firebaseAuthRequest('accounts:signUp', {
+      email,
+      password: crypto.randomBytes(36).toString('base64url'),
+      returnSecureToken: true,
+    });
+  } catch (error) {
+    if (error?.code !== 'EMAIL_EXISTS') throw error;
+  }
+}
+
+function friendlyFirebaseResetError(error) {
+  const code = String(error?.code || error?.message || '');
+  if (code === 'FIREBASE_NOT_CONFIGURED') return 'Password reset is not configured. Add FIREBASE_WEB_API_KEY in Render.';
+  if (/API_KEY_INVALID|API key not valid|INVALID_API_KEY/i.test(code)) return 'Firebase rejected the API key. Check FIREBASE_WEB_API_KEY in Render.';
+  if (code === 'OPERATION_NOT_ALLOWED') return 'Enable the Email/Password sign-in provider in Firebase Authentication.';
+  if (code === 'EXPIRED_OOB_CODE') return 'This password reset link has expired. Please request a new one.';
+  if (code === 'INVALID_OOB_CODE') return 'This password reset link is invalid or has already been used.';
+  if (code === 'USER_DISABLED') return 'This password reset account is disabled in Firebase.';
+  if (code === 'TOO_MANY_ATTEMPTS_TRY_LATER') return 'Too many reset attempts. Please wait a little and try again.';
+  if (code === 'FIREBASE_UNREACHABLE') return 'Could not reach Firebase Authentication. Please try again.';
+  return 'Firebase could not complete the password reset. Please try again.';
 }
 
 const toPublic = (doc) => {
@@ -303,106 +300,64 @@ app.post('/api/auth/change-email', auth, async (req, res) => {
   res.json({ email, token: tokenFor(user) });
 });
 app.post('/api/auth/password-reset', async (req, res) => {
-  let createdTokenId = null;
+  const generic = { ok: true, message: 'If an account exists for this email, a Firebase password reset link has been sent.' };
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
-    const generic = { ok: true, message: 'If an account exists for this email, a password reset link has been sent.' };
+    if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
 
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ error: 'Please enter a valid email address.' });
-    }
-
-    // Always return the same success response for registered and unregistered
-    // addresses so this endpoint cannot be used to discover user accounts.
-    const user = await User.findOne({ email });
+    // Keep the response generic so this endpoint cannot be used to discover
+    // which email addresses are registered in MongoDB.
+    const user = await User.findOne({ email }).lean();
     if (!user) return res.json(generic);
 
-    await PasswordResetToken.deleteMany({ user_id: user.profile_id, used_at: null });
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const resetToken = await PasswordResetToken.create({
-      user_id: user.profile_id,
-      token_hash: tokenHash,
-      expires_at: new Date(Date.now() + 30 * 60 * 1000),
+    await ensureFirebaseRecoveryUser(email);
+    await firebaseAuthRequest('accounts:sendOobCode', {
+      requestType: 'PASSWORD_RESET',
+      email,
     });
-    createdTokenId = resetToken._id;
-
-    const configuredClientUrl = String(process.env.CLIENT_URL || 'http://localhost:5173')
-      .split(',')
-      .map(value => value.trim())
-      .find(Boolean);
-    const clientUrl = configuredClientUrl.replace(/\/$/, '');
-    const resetUrl = `${clientUrl}/?resetToken=${encodeURIComponent(rawToken)}`;
-    const productName = process.env.APP_NAME || 'CampusFix CCMMS';
-
-    await sendTransactionalEmail({
-      to: email,
-      subject: `Reset your ${productName} password`,
-      text: [
-        `We received a request to reset your ${productName} password.`,
-        '',
-        `Open this link to choose a new password: ${resetUrl}`,
-        '',
-        'This link expires in 30 minutes and can be used only once.',
-        'If you did not request a password reset, you can safely ignore this email.'
-      ].join('\n'),
-      html: `<!doctype html>
-        <html lang="en">
-          <body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
-            <div style="max-width:600px;margin:0 auto;padding:32px 16px">
-              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
-                <h1 style="font-size:24px;margin:0 0 16px">Reset your password</h1>
-                <p style="font-size:15px;line-height:1.6;margin:0 0 24px">We received a request to reset your ${productName} password.</p>
-                <p style="margin:0 0 24px"><a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Reset Password</a></p>
-                <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 12px">This secure link expires in 30 minutes and can be used only once.</p>
-                <p style="font-size:14px;line-height:1.6;color:#475569;margin:0">If you did not request this change, you can safely ignore this email.</p>
-              </div>
-            </div>
-          </body>
-        </html>`,
-    });
-
     res.json(generic);
-  } catch (e) {
-    // Do not leave a usable reset token behind when delivery fails.
-    if (createdTokenId) await PasswordResetToken.deleteOne({ _id: createdTokenId }).catch(() => {});
-    console.error('Password reset email error:', e);
-    const raw = String(e?.message || e);
-    let error = 'The password reset email could not be sent. Please try again later.';
-    if (e?.code === 'EMAIL_NOT_CONFIGURED') {
-      error = 'Password reset email is not configured. Add RESEND_API_KEY in Render.';
-    } else if (/validation_error|invalid_from_address|domain.*verif|from.*verif/i.test(raw)) {
-      error = 'The sender address is not verified. Configure RESEND_FROM with a verified sender in Resend.';
-    } else if (/restricted|testing emails|only send.*your own/i.test(raw)) {
-      error = 'Resend test mode can only email the Resend account address. Verify a domain to email other users.';
-    } else if (/401|403|invalid.*api.*key|missing_api_key/i.test(raw)) {
-      error = 'The email API key was rejected. Check RESEND_API_KEY in Render.';
-    } else if (/535|BadCredentials|Username and Password not accepted|Invalid login/i.test(raw)) {
-      error = 'The SMTP service rejected its credentials.';
-    } else if (/ETIMEDOUT|Connection timeout/i.test(raw)) {
-      error = 'The email connection timed out. On Render Free, configure RESEND_API_KEY instead of Gmail SMTP.';
-    }
-    res.status(500).json({ error });
+  } catch (error) {
+    console.error('Firebase password reset email error:', error);
+    res.status(500).json({ error: friendlyFirebaseResetError(error) });
+  }
+});
+
+app.post('/api/auth/verify-password-reset', async (req, res) => {
+  try {
+    const oobCode = String(req.body.oobCode || '');
+    if (!oobCode) return res.status(400).json({ error: 'Password reset code is missing.' });
+    const result = await firebaseAuthRequest('accounts:resetPassword', { oobCode });
+    const email = String(result.email || '').trim().toLowerCase();
+    if (!email || !(await User.exists({ email }))) return res.status(400).json({ error: 'This reset link is not connected to a CampusFix account.' });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ error: friendlyFirebaseResetError(error) });
   }
 });
 
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const token = String(req.body.token || '');
+    const oobCode = String(req.body.oobCode || '');
     const password = String(req.body.password || '');
-    if (!token || password.length < 6) return res.status(400).json({ error: 'Valid token and a password of at least 6 characters are required.' });
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const reset = await PasswordResetToken.findOne({ token_hash: tokenHash, used_at: null, expires_at: { $gt: new Date() } });
-    if (!reset) return res.status(400).json({ error: 'Reset link is invalid or expired.' });
-    const user = await User.findOne({ profile_id: reset.user_id });
-    if (!user) return res.status(404).json({ error: 'User account not found.' });
+    if (!oobCode || password.length < 6) return res.status(400).json({ error: 'A valid reset code and a password of at least 6 characters are required.' });
+
+    // First verify without consuming the one-time code, then make sure it maps
+    // to a real MongoDB account. Firebase remains only the recovery mechanism.
+    const verified = await firebaseAuthRequest('accounts:resetPassword', { oobCode });
+    const email = String(verified.email || '').trim().toLowerCase();
+    const user = email ? await User.findOne({ email }) : null;
+    if (!user) return res.status(400).json({ error: 'This reset link is not connected to a CampusFix account.' });
+
+    // Confirm the Firebase reset, then write the same new password hash into
+    // MongoDB. Normal sign-in continues to validate only against MongoDB.
+    await firebaseAuthRequest('accounts:resetPassword', { oobCode, newPassword: password });
     user.password_hash = await bcrypt.hash(password, 12);
     await user.save();
-    reset.used_at = new Date();
-    await reset.save();
-    await PasswordResetToken.deleteMany({ user_id: reset.user_id, used_at: null });
     res.json({ ok: true, message: 'Password changed successfully. You can now sign in.' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (error) {
+    console.error('Firebase password reset confirmation error:', error);
+    res.status(400).json({ error: friendlyFirebaseResetError(error) });
+  }
 });
 
 // Keep uploads in MongoDB instead of Render's ephemeral filesystem.
@@ -490,11 +445,17 @@ app.delete('/api/data/:collection', auth, async (req, res) => {
 });
 
 async function seedAdmin() {
-  const email = (process.env.ADMIN_EMAIL || 'admin@campusfix.local').toLowerCase();
+  const email = String(process.env.ADMIN_EMAIL || 'admin@campusfix.local').trim().toLowerCase();
+  const password = String(process.env.ADMIN_PASSWORD || '').trim();
   if (await User.exists({ email })) return;
+  if (!password) {
+    console.warn('ADMIN_PASSWORD is not set; skipping automatic admin creation.');
+    return;
+  }
+  if (password.length < 8) throw new Error('ADMIN_PASSWORD must be at least 8 characters.');
   const id = new mongoose.Types.ObjectId().toString(); const now = new Date().toISOString();
   await modelFor('profiles').create({ _id: id, id, email, full_name: 'CampusFix Admin', role: 'admin', is_active: true, created_at: now, updated_at: now });
-  await User.create({ email, password_hash: await bcrypt.hash(process.env.ADMIN_PASSWORD || 'Admin@123', 12), profile_id: id });
+  await User.create({ email, password_hash: await bcrypt.hash(password, 12), profile_id: id });
   console.log(`Default admin created: ${email}`);
 }
 

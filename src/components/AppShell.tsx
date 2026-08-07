@@ -17,6 +17,7 @@ import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { supabase } from '@/lib/supabase';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { BrandLogo } from '@/components/BrandLogo';
 
 type Screen =
   | 'dashboard'
@@ -110,7 +111,7 @@ export const AppShell = () => {
       >
         <div className="flex items-center justify-between px-5 h-16 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shadow-sm" />
+            <BrandLogo className="w-10 h-10 rounded-lg border border-slate-200 shadow-sm" />
             <div>
               <h1 className="text-base font-bold text-slate-900 leading-none">CCMMS</h1>
               <p className="text-[10px] text-slate-500 mt-0.5">{roleLabel[role]} Portal</p>
@@ -173,7 +174,7 @@ export const AppShell = () => {
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-2">
-            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-8 h-8 rounded-md object-cover" />
+            <BrandLogo className="w-8 h-8 rounded-md" />
             <span className="font-bold text-slate-900">CCMMS</span>
           </div>
           <button onClick={() => navigate('notifications')} className="relative text-slate-600 p-1">

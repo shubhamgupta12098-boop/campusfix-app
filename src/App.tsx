@@ -7,7 +7,9 @@ import { ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 
 function App() {
   const { session, profile, loading } = useAuthStore();
-  const resetToken = new URLSearchParams(window.location.search).get('resetToken');
+  const params = new URLSearchParams(window.location.search);
+  const resetMode = params.get('mode');
+  const resetCode = params.get('oobCode');
 
   useEffect(() => {
     // ensure dark scrollbars don't appear
@@ -16,8 +18,8 @@ function App() {
   }, []);
 
 
-  if (resetToken) {
-    return <ResetPasswordScreen token={resetToken} onDone={() => { window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }} />;
+  if (resetMode === 'resetPassword' && resetCode) {
+    return <ResetPasswordScreen oobCode={resetCode} onDone={() => { window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }} />;
   }
 
   if (loading) {
