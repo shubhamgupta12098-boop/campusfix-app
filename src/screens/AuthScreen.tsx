@@ -69,7 +69,7 @@ export function AuthScreen() {
       setForgotError(result.error);
       return;
     }
-    setForgotNotice('A Firebase password reset link has been sent. Please check your inbox and Spam or Junk folder.');
+    setForgotNotice('Password reset link sent successfully. It may take a few minutes to arrive. Please check your inbox and Spam or Junk folder.');
   };
 
   const switchMode = () => {
