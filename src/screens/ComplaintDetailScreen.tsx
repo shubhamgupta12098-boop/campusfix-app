@@ -137,7 +137,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
       return;
     }
     setFeedbackOpen(false);
-    setFeedbackMessage('Thank you! Aapki rating aur feedback save ho gaya.');
+    setFeedbackMessage('Thank you! Your rating and feedback have been saved.');
     void load();
   };
 
@@ -236,7 +236,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
 
           {complaint.photo_urls && complaint.photo_urls.length > 0 && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-1">Student Complaint Photos</h3><p className="text-xs text-slate-500 mb-3">Student ne complaint ke saath ye photos upload ki hain.</p>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Student Complaint Photos</h3><p className="text-xs text-slate-500 mb-3">These photos were uploaded by the student with the complaint.</p>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {complaint.photo_urls.map((url, idx) => (
                   <div key={idx} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
@@ -255,7 +255,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                   <p className="text-xs text-slate-500 mt-0.5">
                     {complaint.status === 'in_progress'
                       ? 'Work is currently in progress — before-repair photo captured so far.'
-                      : 'Staff ne kaam kaise kiya, uski before/after photos aur remarks.'}
+                      : 'Review the before/after photos and remarks showing how the staff completed the work.'}
                   </p>
                 </div>
                 {workOrder.profiles?.full_name && <Badge className="bg-blue-50 text-blue-700">{workOrder.profiles.full_name}</Badge>}
@@ -354,8 +354,8 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
               <div className="flex items-center gap-3">
                 <Star className="w-5 h-5 text-amber-500" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-900">Staff ne kaam kaisa kiya?</p>
-                  <p className="text-xs text-slate-600">Before/after photos aur completed work dekhkar 1–5 star rating aur feedback dein.</p>
+                  <p className="text-sm font-semibold text-slate-900">How well did the staff complete the work?</p>
+                  <p className="text-xs text-slate-600">Review the before/after photos and completed work, then give a 1–5 star rating and feedback.</p>
                 </div>
                 <button onClick={() => setFeedbackOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors">
                   Rate Now
@@ -384,7 +384,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }: { complaintId: st
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
-                placeholder="Staff ke kaam, quality aur behaviour ke baare mein feedback likhein…"
+                placeholder="Share your feedback about the staff's work, quality, and behavior…"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 resize-none mb-3"
               />
               <div className="flex gap-2">

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase';
 import { GraduationCap, BadgeCheck, Wrench, Mail, Lock, User, Phone, Building2, Home, DoorOpen, X, KeyRound, CheckCircle2 } from 'lucide-react';
-import { BrandLogo } from '@/components/BrandLogo';
 
 // Admin accounts are never offered on public signup — an existing admin
 // creates them from User Management instead.
@@ -69,7 +68,7 @@ export function AuthScreen() {
       setForgotError(result.error);
       return;
     }
-    setForgotNotice('Password reset link sent successfully. It may take a few minutes to arrive. Please check your inbox and Spam or Junk folder.');
+    setForgotNotice('A password reset link has been sent. Please check your inbox and Spam or Junk folder.');
   };
 
   const switchMode = () => {
@@ -86,7 +85,7 @@ export function AuthScreen() {
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(59,130,246,0.4) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(14,165,233,0.3) 0%, transparent 50%)' }} />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
-            <BrandLogo className="w-14 h-14 rounded-xl shadow-lg" />
+            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-14 h-14 rounded-xl object-cover bg-white shadow-lg" />
             <div>
               <h1 className="text-xl font-bold tracking-tight">CCMMS</h1>
               <p className="text-xs text-slate-400">Campus Complaint Management</p>
@@ -124,7 +123,7 @@ export function AuthScreen() {
       <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
         <div className="w-full max-w-md py-8">
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <BrandLogo className="w-12 h-12 rounded-xl" />
+            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-12 h-12 rounded-xl object-cover" />
             <h1 className="text-lg font-bold text-slate-900">CCMMS</h1>
           </div>
 
@@ -255,7 +254,7 @@ export function AuthScreen() {
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
               <div className="flex gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><KeyRound className="h-5 w-5" /></div>
-                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">Check your email for the password reset link. If you don’t see it, please check your spam folder.</p></div>
+                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">We will email a secure link to reset your password inside CampusFix.</p></div>
               </div>
               <button type="button" onClick={() => setForgotOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><X className="h-5 w-5" /></button>
             </div>

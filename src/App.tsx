@@ -1,15 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import { AuthScreen } from '@/screens/AuthScreen';
+import { ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 import { AppShell } from '@/components/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 
 function App() {
   const { session, profile, loading } = useAuthStore();
-  const params = new URLSearchParams(window.location.search);
-  const resetMode = params.get('mode');
-  const resetCode = params.get('oobCode');
+  // The "forgot password" email link lands here with ?mode=resetPassword&oobCode=...
+  // (Firebase's standard params). This is the only place Firebase touches the frontend.
+  const [resetCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('mode') === 'resetPassword' ? params.get('oobCode') : null;
+  });
 
   useEffect(() => {
     // ensure dark scrollbars don't appear
@@ -17,9 +20,12 @@ function App() {
     document.documentElement.classList.toggle('dark', localStorage.getItem('cmms_dark_mode') === 'true');
   }, []);
 
-
-  if (resetMode === 'resetPassword' && resetCode) {
-    return <ResetPasswordScreen oobCode={resetCode} onDone={() => { window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }} />;
+  if (resetCode) {
+    return (
+      <ErrorBoundary>
+        <ResetPasswordScreen oobCode={resetCode} />
+      </ErrorBoundary>
+    );
   }
 
   if (loading) {

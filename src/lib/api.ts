@@ -1,19 +1,23 @@
-const configuredApiUrl = String(import.meta.env.VITE_API_URL || '').trim();
-const rawApiUrl = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:5000' : '')).replace(/\/$/, '');
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'https://campusfix-app-x04t.onrender.com').replace(/\/$/, '');
 // Accept either https://host or https://host/api in VITE_API_URL.
-// All frontend calls below use paths such as /auth/login, so normalize to the /api base.
-const API_URL = rawApiUrl ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`) : '';
-const TOKEN_KEY = 'campusfix_mongo_token';
+// All frontend calls use /api paths, so normalize to the /api base.
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (token: string | null) => token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY);
+// Session token issued by our own MongoDB-backed /auth/login and /auth/signup
+// endpoints. Firebase is no longer involved in the frontend at all — it's used
+// server-side only, for the forgot-password email flow.
+const TOKEN_KEY = 'campusfix_session_token';
+export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+export const setToken = (token: string | null) => {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+};
 
-if (!configuredApiUrl) {
-  console.warn('[CampusFix] VITE_API_URL is not set. Local development falls back to http://localhost:5000; production requires VITE_API_URL at build time.');
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[CampusFix] VITE_API_URL is not set at build time. Falling back to', API_URL, '- set VITE_API_URL in your Render static site env vars and redeploy.');
 }
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
-  if (!API_URL) throw new Error('VITE_API_URL is not configured. Add the Render API URL to the frontend environment and redeploy the static site.');
   const token = getToken();
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');

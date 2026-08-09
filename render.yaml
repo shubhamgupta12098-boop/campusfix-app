@@ -3,32 +3,39 @@ services:
     name: campusfix-api
     runtime: node
     rootDir: server
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/health
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: MONGODB_URI
         sync: false
-      - key: JWT_SECRET
-        generateValue: true
       - key: CLIENT_URL
         sync: false
       - key: FIREBASE_WEB_API_KEY
         sync: false
       - key: ADMIN_EMAIL
-        value: admin@campusfix.local
+        sync: false
       - key: ADMIN_PASSWORD
         sync: false
 
   - type: web
     name: campusfix-web
     runtime: static
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
+        sync: false
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
         sync: false
     routes:
       - type: rewrite

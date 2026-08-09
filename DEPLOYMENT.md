@@ -1,157 +1,145 @@
-# CampusFix (CCMMS) — Render Deployment Guide
+# CampusFix (CCMMS) — Deployment Guide
 
-## Architecture
+Stack: React + Vite frontend, Node.js/Express API, MongoDB Atlas, JWT auth,
+image uploads stored in MongoDB GridFS, Capacitor Android app.
 
-- **Frontend:** React + Vite
-- **Backend:** Node.js + Express
-- **Main database and authentication:** MongoDB Atlas + bcrypt + JWT
-- **Forgot Password only:** Firebase Authentication email reset flow
-- **Image storage:** MongoDB GridFS
-- **Android:** Capacitor
+This app deploys as **two separate Render services**:
 
-Firebase does **not** replace MongoDB login, signup, sessions, profiles, complaints, or other app data. It is used only to issue and verify forgotten-password reset links. After Firebase verifies the one-time reset code, the backend stores the new bcrypt password hash in MongoDB, so normal sign-in continues to use MongoDB.
-
-The repository contains a `render.yaml` Blueprint that creates two Render services:
-
-| Service | Render type | Root | Purpose |
+| Service | Type | Folder | Purpose |
 |---|---|---|---|
-| `campusfix-api` | Node Web Service | `server/` | Express API + MongoDB |
+| `campusfix-api` | Web Service (Node) | `server/` | Express API + MongoDB |
 | `campusfix-web` | Static Site | project root | React frontend |
+
+`render.yaml` at the project root already defines both. In Render, use
+**New > Blueprint** and point it at this repo to create both services at once,
+or create them manually with the settings below.
+
+---
 
 ## 1. MongoDB Atlas
 
-1. Create a MongoDB Atlas cluster.
-2. Create a database user under **Database Access**.
-3. Under **Network Access**, allow the Render service to connect. For a simple Render setup, `0.0.0.0/0` is commonly used; use tighter network rules if your hosting setup provides fixed outbound addresses.
-4. Copy the Node.js connection string, for example:
+1. Create a free cluster at https://cloud.mongodb.com.
+2. **Database Access** → add a database user with a password (avoid `@ : /`
+   characters in the password — they break the connection string).
+3. **Network Access** → add `0.0.0.0/0` (Render's outbound IPs are not fixed,
+   so this is required, not just convenient).
+4. **Connect → Drivers → Node.js** → copy the connection string. It looks like:
+   ```
+   mongodb+srv://USERNAME:PASSWORD@your-cluster.mongodb.net/campusfix?retryWrites=true&w=majority
+   ```
+
+## 2. Backend service (`campusfix-api`)
+
+Root directory: `server`. Build command: `npm install`. Start command: `npm start`.
+
+Set these environment variables in the Render dashboard (Environment tab):
 
 ```env
 MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@your-cluster.mongodb.net/campusfix?retryWrites=true&w=majority
-```
-
-If the database password contains reserved URL characters such as `@`, `:`, `/`, `?`, or `#`, URL-encode it before putting it in the connection string.
-
-## 2. Firebase Authentication for Forgot Password
-
-Create a Firebase project, then configure Authentication:
-
-1. Open **Firebase Console > Authentication > Sign-in method** and enable **Email/Password**.
-2. Open **Project settings > General** and copy the project's **Web API Key**. You will add it to the Render backend as `FIREBASE_WEB_API_KEY`.
-3. Deploy the frontend once so you know its final Render URL, for example `https://campusfix-web.onrender.com`.
-4. In **Firebase Console > Authentication > Settings > Authorized domains**, add the frontend hostname, for example `campusfix-web.onrender.com`.
-5. In **Firebase Console > Authentication > Templates > Password reset**, edit the template and choose **Customize action URL**. Set it to your frontend URL, for example:
-
-```text
-https://campusfix-web.onrender.com/
-```
-
-This step is required. Firebase will append query parameters such as `mode=resetPassword` and `oobCode=...`; the React app reads that code and sends it to the CampusFix backend for verification and MongoDB password update.
-
-Existing MongoDB users do not need to be manually imported into Firebase. On the first forgot-password request for a registered MongoDB email, the backend creates the matching Firebase recovery account automatically and then asks Firebase to send the reset email.
-
-## 3. Render backend: `campusfix-api`
-
-The Blueprint uses:
-
-```text
-Root directory: server
-Build command: npm ci
-Start command: npm start
-Health check: /api/health
-```
-
-Set these environment variables in Render:
-
-```env
-MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@your-cluster.mongodb.net/campusfix?retryWrites=true&w=majority
-JWT_SECRET=<long random secret; the Blueprint can generate this>
-CLIENT_URL=https://YOUR-FRONTEND.onrender.com
-FIREBASE_WEB_API_KEY=AIzaSy_your_firebase_web_api_key
+JWT_SECRET=<let Render auto-generate this>
+CLIENT_URL=https://campusfix-web.onrender.com
+RESEND_API_KEY=re_your_resend_api_key
+RESEND_FROM=CampusFix CCMMS <onboarding@resend.dev>
+MAIL_FROM=CampusFix CCMMS <onboarding@resend.dev>
+APP_NAME=CampusFix CCMMS
 ADMIN_EMAIL=admin@campusfix.local
-ADMIN_PASSWORD=<strong admin password>
+ADMIN_PASSWORD=<set a real password>
 ```
 
-`CLIENT_URL` must contain the frontend origin, not the API URL. Multiple allowed frontend origins can be separated by commas.
+Notes:
+- `CLIENT_URL` must be your **frontend's** URL (the static site), not the API's own URL.
+  If you have more than one frontend URL (custom domain + the onrender.com one),
+  separate them with commas.
+- `render.yaml` marks `MONGODB_URI`, `CLIENT_URL`, and `RESEND_API_KEY` as
+  `sync: false`. Enter them in Render's Environment tab.
 
-After deployment, open:
+### Configure password-reset email with Resend
+1. Create a Resend account and generate an API key.
+2. Put the key in Render as `RESEND_API_KEY`.
+3. For the first test, keep `RESEND_FROM=CampusFix CCMMS <onboarding@resend.dev>`.
+   In Resend test mode, send the reset email to the same address used for the
+   Resend account.
+4. To send to all registered users, verify your own domain in Resend and change
+   `RESEND_FROM` to an address on that domain, for example
+   `CampusFix CCMMS <no-reply@yourdomain.com>`.
 
-```text
-https://YOUR-API.onrender.com/api/health
-```
+The backend uses Resend over HTTPS, so it works on Render Free without the
+Gmail SMTP `ETIMEDOUT` problem. SMTP remains an optional fallback for local or
+paid hosting.
 
-Expected response:
-
+### Verify the backend is actually running
+Open `https://campusfix-api.onrender.com/api/health` in a browser. You should see:
 ```json
 {"ok":true,"database":"connected"}
 ```
+- `database: "disconnected"` → check `MONGODB_URI` and Atlas Network Access.
+- Page won't load at all → the service either isn't deployed, crashed on boot
+  (check the Render logs — it will print a clear English error now), or is a
+  free-tier service that spun down after 15 minutes idle. A sleeping free-tier
+  service can take 30–50 seconds to wake up on its first request; that first
+  request may show as "could not reach the server" if it times out before
+  waking — try again after a few seconds.
 
-## 4. Render frontend: `campusfix-web`
+## 3. Frontend service (`campusfix-web`)
 
-The Blueprint uses:
+Root directory: project root. Build command: `npm install && npm run build`.
+Publish directory: `dist`.
 
-```text
-Build command: npm ci && npm run build
-Publish directory: dist
-```
-
-Set:
-
+Set this environment variable:
 ```env
-VITE_API_URL=https://YOUR-API.onrender.com/api
+VITE_API_URL=https://campusfix-api.onrender.com/api
 ```
 
-`VITE_API_URL` is a Vite build-time variable. After changing it, redeploy the static site so the new value is included in the generated JavaScript bundle.
+**This is a build-time variable (Vite bakes it into the JS bundle).** Changing
+it in the dashboard does nothing until you trigger a new deploy — use
+**Manual Deploy → Clear build cache & deploy** after setting or changing it.
+This is the single most common cause of the
+`Could not reach the server at https://.../api` error: the frontend was built
+with the wrong (or a since-changed/deleted) backend URL baked in.
 
-The Blueprint includes an SPA rewrite from `/*` to `/index.html`, which is required so Firebase's password-reset action URL can open the React app with query parameters.
+## 4. After both are deployed
 
-## 5. Test the password reset flow
+1. Hard-refresh the frontend (Ctrl+Shift+R) to clear any cached old JS bundle.
+2. Sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` (created automatically on the
+   backend's first successful start).
+3. Test password reset: Sign-in screen → "Forgot password?" → enter a
+   registered email → check inbox and Spam/Junk.
+4. Raise a test complaint with a photo and confirm it displays after a refresh.
 
-1. Register/sign in with a normal CampusFix account. The account remains MongoDB-backed.
-2. Sign out and click **Forgot password?**.
-3. Enter the registered email address.
-4. Firebase sends the password reset email.
-5. Open the email link. It should open your Render frontend and show the CampusFix **Set new password** screen.
-6. Enter a new password. The backend verifies the Firebase `oobCode`, confirms it with Firebase, and saves the new bcrypt password hash in MongoDB.
-7. Return to sign-in and sign in normally. This login is checked against MongoDB, not Firebase.
+### About old broken images
+Earlier versions of this backend stored uploaded photos on Render's local
+disk, which is wiped every time the service restarts or redeploys. Any
+complaint/work-order photo uploaded before this fix has a dead link and
+**cannot be recovered** — the file is gone. New uploads go into MongoDB
+GridFS (`/api/upload` → `GET /uploads/:filename`), which survives restarts
+and redeploys. The UI now shows a neutral "image unavailable" placeholder
+instead of a broken-image icon for any old dead links.
 
-If the email opens Firebase's default reset page instead of the CampusFix page, the Firebase **Customize action URL** setting is missing or points to the wrong frontend URL.
-
-## 6. Dark-mode logo
-
-The project now contains:
-
-- `public/cmms-logo.jpeg` — light-mode logo
-- `public/cmms-logo-dark.png` — dark-background logo
-
-The shared `BrandLogo` component automatically switches assets when `html.dark` is enabled, so the logo no longer keeps a white square background in dark mode.
-
-## 7. Local development
-
-Backend:
+## 5. Android app (Capacitor)
 
 ```bash
-cd server
-cp .env.example .env
-# Fill MONGODB_URI, JWT_SECRET and FIREBASE_WEB_API_KEY
-npm ci
-npm run dev
-```
-
-Frontend, in another terminal:
-
-```bash
-cp .env.example .env
-npm ci
-npm run dev
-```
-
-For local Firebase reset-link testing, add `localhost` to Firebase Authorized domains and temporarily set the Password reset **Customize action URL** to your local frontend URL such as `http://localhost:5173/`. Change it back to the Render URL before production testing.
-
-## 8. Android / Capacitor
-
-```bash
-npm ci
+npm install
 npx cap sync android
 ```
 
-Then open `android/` in Android Studio. The browser-based Firebase password-reset link still needs a web action-handler URL; for production mobile deep-link handling you can add a dedicated Android App Link later without changing the MongoDB authentication architecture.
+Then open `android/` in Android Studio to build/run as usual. `npm install`
+now also pulls in `@capacitor/filesystem` and `@capacitor/share`, used to make
+the CSV export in Reports work as a native "Save/Share" sheet on Android,
+since Android WebViews don't support plain `<a download>` blob links.
+
+## Local development
+
+Terminal 1:
+```bash
+cd server
+cp .env.example .env   # then fill in MONGODB_URI, JWT_SECRET, etc.
+npm install
+npm run dev
+```
+
+Terminal 2 (project root):
+```bash
+echo "VITE_API_URL=http://localhost:5000/api" > .env
+npm install
+npm run dev
+```
