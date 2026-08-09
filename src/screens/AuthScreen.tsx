@@ -255,7 +255,7 @@ export function AuthScreen() {
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
               <div className="flex gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><KeyRound className="h-5 w-5" /></div>
-                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">Firebase will email you a secure, time-limited password reset link.</p></div>
+                <div><h3 className="font-bold text-slate-900">Request password reset</h3><p className="mt-1 text-xs text-slate-500">Check your email for the password reset link. If you don’t see it, please check your spam folder.</p></div>
               </div>
               <button type="button" onClick={() => setForgotOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><X className="h-5 w-5" /></button>
             </div>
