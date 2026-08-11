@@ -1,0 +1,11 @@
+const config = {
+    appId: 'com.campusfix.app',
+    appName: 'CampusFix',
+    webDir: 'dist',
+    plugins: {
+        CapacitorHttp: {
+            enabled: true,
+        },
+    },
+};
+export default config;
