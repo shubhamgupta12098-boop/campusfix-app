@@ -497,7 +497,17 @@ const upload = multer({
   },
 });
 
-app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
+const singleImageUpload = (req, res, next) => {
+  upload.single('file')(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Image must be smaller than 8 MB after processing.' });
+    }
+    return res.status(400).json({ error: error.message || 'Image upload was rejected.' });
+  });
+};
+
+app.post('/api/upload', auth, singleImageUpload, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
     if (!mongoose.connection.db) return res.status(503).json({ error: 'Image storage is not ready.' });

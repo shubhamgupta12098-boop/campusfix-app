@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadDataUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
@@ -49,6 +49,7 @@ export function RaiseComplaintScreen({ onDone }) {
     const [locationDesc, setLocationDesc] = useState('');
     const [priority, setPriority] = useState('medium');
     const [photos, setPhotos] = useState([]);
+    const photoInputRef = useRef(null);
     const handlePhotoUpload = async (e) => {
         const files = Array.from(e.target.files || []).slice(0, 3 - photos.length);
         if (!files.length)
@@ -56,10 +57,14 @@ export function RaiseComplaintScreen({ onDone }) {
         try {
             const next = [];
             for (const file of files) {
-                if (!file.type.startsWith('image/'))
-                    throw new Error('Please select JPG or PNG images only.');
-                if (file.size > 8 * 1024 * 1024)
-                    throw new Error('Each image must be smaller than 8 MB.');
+                // Some Android/WebView file pickers return an empty MIME type.
+                // If a MIME type is present, validate it; Image() below performs the final validation.
+                if (file.type && !file.type.startsWith('image/'))
+                    throw new Error('Please select a valid image file.');
+                // Phone camera photos can be larger than the API limit before compression.
+                // Allow a larger source image; it is resized to 1280px before upload.
+                if (file.size > 25 * 1024 * 1024)
+                    throw new Error('The selected image is too large. Please choose an image smaller than 25 MB.');
                 next.push(await readAndCompressImage(file));
             }
             setPhotos((prev) => [...prev, ...next].slice(0, 3));
@@ -83,6 +88,8 @@ export function RaiseComplaintScreen({ onDone }) {
             return setError('Please fill in all required fields.');
         if (!building.trim() || !floor.trim() || !room.trim())
             return setError('Please enter building, floor and room/location.');
+        if (photos.length === 0)
+            return setError('Please add a before photo of the issue.');
         setSubmitting(true);
         const selectedCat = FIXED_CATEGORIES.find((c) => c.id === categoryId);
         const now = new Date();
@@ -194,12 +201,21 @@ export function RaiseComplaintScreen({ onDone }) {
         <Card className="p-5"><label className="block text-sm font-semibold text-slate-900 mb-3">Priority</label><div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">{['low', 'medium', 'high', 'emergency'].map((p) => { const cfg = PRIORITY_CONFIG[p]; const active = priority === p; return <button key={p} type="button" onClick={() => setPriority(p)} className={`py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${active ? `${cfg.bg} ${cfg.color} border-current` : 'bg-white text-slate-500 border-slate-200'}`}>{cfg.label}</button>; })}</div></Card>
 
         <Card className="p-5">
-          <label className="block text-sm font-semibold text-slate-900 mb-3">Attach Photos <span className="font-normal text-slate-400">(optional, maximum 3)</span></label>
+          <label className="block text-sm font-semibold text-slate-900 mb-3">Before Photo * <span className="font-normal text-slate-400">(maximum 3)</span></label>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={handlePhotoUpload}
+            aria-label="Choose before photo"
+          />
           <div className="flex flex-wrap gap-3">
-            {photos.map((photo, idx) => <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200"><img src={photo} alt="Attachment" className="w-full h-full object-cover"/><button type="button" onClick={() => removePhoto(idx)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center"><X className="w-3.5 h-3.5"/></button></div>)}
-            {photos.length < 3 && <label className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-400 bg-slate-50"><Camera className="w-5 h-5 text-slate-400"/><span className="text-[10px] text-slate-500">Add photo</span><input type="file" accept="image/jpeg,image/png" multiple className="hidden" onChange={handlePhotoUpload}/></label>}
+            {photos.map((photo, idx) => <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200"><img src={photo} alt={`Before issue ${idx + 1}`} className="w-full h-full object-cover"/><button type="button" onClick={() => removePhoto(idx)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center" aria-label={`Remove before photo ${idx + 1}`}><X className="w-3.5 h-3.5"/></button></div>)}
+            {photos.length < 3 && <button type="button" onClick={() => photoInputRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-400 bg-slate-50" aria-label="Add before photo"><Camera className="w-5 h-5 text-slate-400"/><span className="text-[10px] text-slate-500">Add photo</span></button>}
           </div>
-          <p className="text-xs text-slate-400 mt-2">Images are compressed before upload.</p>
+          <p className="text-xs text-slate-400 mt-2">Add at least one photo of the issue before repair. Gallery/camera images are supported and compressed before upload.</p>
         </Card>
 
         <button type="submit" disabled={submitting} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 disabled:opacity-60"><Send className="w-4 h-4"/>{submitting ? 'Submitting…' : 'Submit Complaint'}</button>

@@ -7,7 +7,7 @@ export default [
   { ignores: ['dist', 'server', 'android'] },
   {
     ...js.configs.recommended,
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'module',
