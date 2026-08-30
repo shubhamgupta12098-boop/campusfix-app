@@ -1,6 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
-import { LayoutDashboard, PlusCircle, ListChecks, Bell, BarChart3, Users, Wrench, ClipboardList, Settings, LogOut, Menu, X, UserCircle, Star } from 'lucide-react';
+import {
+    BarChart3,
+    Bell,
+    ChevronRight,
+    ClipboardList,
+    Home,
+    LogOut,
+    Menu,
+    Plus,
+    Settings,
+    ShieldCheck,
+    Star,
+    UserCircle,
+    Users,
+    Wrench,
+    X,
+} from 'lucide-react';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
@@ -16,146 +32,232 @@ import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { supabase } from '@/lib/supabase';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+
 const NAV_ITEMS = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student', 'staff', 'admin'] },
-    { id: 'raise', label: 'Raise Complaint', icon: PlusCircle, roles: ['student'] },
-    { id: 'my-complaints', label: 'My Complaints', icon: ListChecks, roles: ['student'] },
-    { id: 'feedback', label: 'Feedback & Ratings', icon: Star, roles: ['student', 'admin'] },
-    { id: 'technician-jobs', label: 'My Jobs', icon: Wrench, roles: ['staff'] },
-    { id: 'assign', label: 'Assign Complaints', icon: ClipboardList, roles: ['admin'] },
-    { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, roles: ['admin'] },
-    { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'staff'] },
-    { id: 'approvals', label: 'Work Approvals', icon: Settings, roles: ['admin'] },
-    { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
-    { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['student', 'staff', 'admin'] },
-    { id: 'profile', label: 'My Profile', icon: UserCircle, roles: ['student', 'staff', 'admin'] },
+    { id: 'dashboard', label: 'Home', description: 'Overview and recent activity', icon: Home, roles: ['student', 'staff', 'admin'] },
+    { id: 'raise', label: 'Submit Complaint', description: 'Report a new campus issue', icon: Plus, roles: ['student'] },
+    { id: 'my-complaints', label: 'Track Complaints', description: 'Follow your submitted requests', icon: ClipboardList, roles: ['student'] },
+    { id: 'feedback', label: 'Feedback & Ratings', description: 'Rate completed maintenance work', icon: Star, roles: ['student', 'admin'] },
+    { id: 'technician-jobs', label: 'My Jobs', description: 'Start and complete assigned work', icon: Wrench, roles: ['staff'] },
+    { id: 'assign', label: 'Assign Complaints', description: 'Verify and route new complaints', icon: ClipboardList, roles: ['admin'] },
+    { id: 'work-orders', label: 'Work Orders', description: 'Review maintenance records', icon: ClipboardList, roles: ['admin'] },
+    { id: 'reports', label: 'Reports & Analytics', description: 'Performance and campus insights', icon: BarChart3, roles: ['admin', 'staff'] },
+    { id: 'approvals', label: 'Work Approvals', description: 'Approve or return completed work', icon: Settings, roles: ['admin'] },
+    { id: 'users', label: 'User Management', description: 'Manage people and access', icon: Users, roles: ['admin'] },
+    { id: 'notifications', label: 'Notifications', description: 'Updates that need your attention', icon: Bell, roles: ['student', 'staff', 'admin'] },
+    { id: 'profile', label: 'My Profile', description: 'Account, preferences and security', icon: UserCircle, roles: ['student', 'staff', 'admin'] },
 ];
+
+const BOTTOM_NAV = {
+    student: {
+        // Keep Submit as its own navigation item. The centre + is only a quick
+        // shortcut to start a fresh complaint, while notifications stay in the
+        // top bell/drawer so the bottom bar matches the student flow.
+        left: [
+            { id: 'dashboard', label: 'Home', icon: Home },
+            { id: 'raise', label: 'Submit', icon: ClipboardList },
+        ],
+        action: { id: 'raise', label: 'New', icon: Plus },
+        right: [
+            { id: 'my-complaints', label: 'Track', icon: ClipboardList },
+            { id: 'profile', label: 'Profile', icon: UserCircle },
+        ],
+    },
+    staff: {
+        left: [
+            { id: 'dashboard', label: 'Home', icon: Home },
+            { id: 'reports', label: 'Reports', icon: BarChart3 },
+        ],
+        action: { id: 'technician-jobs', label: 'Jobs', icon: Wrench },
+        right: [
+            { id: 'notifications', label: 'Alerts', icon: Bell },
+            { id: 'profile', label: 'Profile', icon: UserCircle },
+        ],
+    },
+    admin: {
+        left: [
+            { id: 'dashboard', label: 'Home', icon: Home },
+            { id: 'work-orders', label: 'Orders', icon: ClipboardList },
+        ],
+        action: { id: 'assign', label: 'Assign', icon: ClipboardList },
+        right: [
+            { id: 'notifications', label: 'Alerts', icon: Bell },
+            { id: 'profile', label: 'Profile', icon: UserCircle },
+        ],
+    },
+};
+
+const ROLE_LABELS = {
+    student: 'Student portal',
+    staff: 'Maintenance portal',
+    admin: 'Administrator portal',
+};
+
 export const AppShell = () => {
     const { profile, signOut } = useAuthStore();
     const [screen, setScreen] = useState('dashboard');
     const [selectedComplaintId, setSelectedComplaintId] = useState(null);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
-    const role = (profile?.role ?? 'student');
-    const items = NAV_ITEMS.filter((i) => i.roles.includes(role));
+    const role = profile?.role ?? 'student';
+    const items = useMemo(() => NAV_ITEMS.filter((item) => item.roles.includes(role)), [role]);
+    const bottomNav = BOTTOM_NAV[role] || BOTTOM_NAV.student;
+
     useEffect(() => {
         if (!profile?.id)
             return;
         let active = true;
         const loadUnread = async () => {
-            const result = await supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+            let query = supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+            // Students only receive a single actionable alert when completed
+            // work is approved. Staff/admin keep their operational alerts.
+            if (role === 'student')
+                query = query.eq('type', 'work_completed');
+            const result = await query;
             if (active)
                 setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
         };
         void loadUnread();
         const timer = window.setInterval(loadUnread, 15000);
-        return () => { active = false; window.clearInterval(timer); };
-    }, [profile?.id, screen]);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, [profile?.id, role, screen]);
+
+    const navigate = (nextScreen) => {
+        setScreen(nextScreen);
+        setDrawerOpen(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const openComplaint = (id) => {
         setSelectedComplaintId(id);
         setScreen('complaint-detail');
+        setDrawerOpen(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
-    const navigate = (s) => {
-        setScreen(s);
-        setSidebarOpen(false);
-    };
-    const roleLabel = {
-        student: 'Student',
-        staff: 'Staff',
-        admin: 'Administrator',
-    };
-    const initials = (profile?.full_name || '?')
+
+    const activeScreen = screen === 'complaint-detail'
+        ? role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign'
+        : screen;
+
+    const initials = (profile?.full_name || 'CampusFix User')
         .split(' ')
-        .map((p) => p[0])
+        .map((part) => part[0])
         .slice(0, 2)
         .join('')
         .toUpperCase();
-    return (<div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-white border-r border-slate-200 flex flex-col transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="flex items-center justify-between px-5 h-16 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shadow-sm"/>
-            <div>
-              <h1 className="text-base font-bold text-slate-900 leading-none">CCMMS</h1>
-              <p className="text-[10px] text-slate-500 mt-0.5">{roleLabel[role]} Portal</p>
-            </div>
+
+    const renderNavButton = ({ id, label, icon: Icon }) => {
+        const active = activeScreen === id;
+        const count = id === 'notifications' ? unreadNotifications : 0;
+        return (<button
+          key={id}
+          type="button"
+          onClick={() => navigate(id)}
+          className={'campus-nav-item ' + (active ? 'is-active' : '')}
+          aria-current={active ? 'page' : undefined}
+        >
+          <span className="campus-nav-icon">
+            <Icon size={22} strokeWidth={active ? 2.6 : 2}/>
+            {count > 0 && <span className="campus-nav-badge">{count > 9 ? '9+' : count}</span>}
+          </span>
+          <span>{label}</span>
+        </button>);
+    };
+
+    const actionActive = activeScreen === bottomNav.action.id;
+    const ActionIcon = bottomNav.action.icon;
+
+    return (<div className="campus-app-shell">
+      <div className="campus-app-frame">
+        <header className="campus-topbar">
+          <button type="button" onClick={() => setDrawerOpen(true)} className="campus-icon-button" aria-label="Open app menu">
+            <Menu size={22}/>
+          </button>
+
+          <button type="button" onClick={() => navigate('dashboard')} className="campus-brand" aria-label="Go to CampusFix home">
+            <span className="campus-brand-mark"><ShieldCheck size={27} strokeWidth={2.5}/></span>
+            <span>
+              <strong>CampusFix</strong>
+              <small>{ROLE_LABELS[role]}</small>
+            </span>
+          </button>
+
+          <div className="campus-topbar-actions">
+            <button type="button" onClick={() => navigate('notifications')} className="campus-icon-button campus-alert-button" aria-label="Open notifications">
+              <Bell size={22}/>
+              {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+            </button>
+            <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5"/>
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const active = screen === item.id || (item.id === 'my-complaints' && screen === 'complaint-detail');
-            return (<button key={item.id} onClick={() => navigate(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <Icon className={`w-[18px] h-[18px] ${active ? 'text-blue-600' : 'text-slate-400'}`}/>
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.id === 'notifications' && unreadNotifications > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
-              </button>);
-        })}
-        </nav>
-
-        <div className="p-3 border-t border-slate-100">
-          <div className="flex items-center gap-3 px-2 py-2 mb-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-xs font-bold">
-              {initials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-slate-900 truncate">{profile?.full_name}</p>
-              <p className="text-xs text-slate-500 truncate">{profile?.college_id || ''}</p>
-            </div>
-          </div>
-          <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-all">
-            <LogOut className="w-[18px] h-[18px] text-slate-400"/>
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-30 lg:hidden" onClick={() => setSidebarOpen(false)}/>}
-
-      {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Mobile header */}
-        <header className="lg:hidden flex items-center justify-between px-4 h-16 bg-white border-b border-slate-200 sticky top-0 z-20">
-          <button onClick={() => setSidebarOpen(true)} className="text-slate-600">
-            <Menu className="w-6 h-6"/>
-          </button>
-          <div className="flex items-center gap-2">
-            <img src="/cmms-logo.jpeg" alt="CCMMS logo" className="w-8 h-8 rounded-md object-cover"/>
-            <span className="font-bold text-slate-900">CCMMS</span>
-          </div>
-          <button onClick={() => navigate('notifications')} className="relative text-slate-600 p-1">
-            <Bell className="w-5 h-5"/>
-            {unreadNotifications > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
-          </button>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-          {/* resetKey=screen: if a screen crashes, switching to another nav
-            item clears the error automatically instead of staying stuck. */}
+        <main className="campus-page-content" data-screen={screen}>
           <ErrorBoundary resetKey={screen}>
             {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint}/>}
             {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')}/>}
             {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint}/>}
             {screen === 'complaint-detail' && selectedComplaintId && (<ComplaintDetailScreen complaintId={selectedComplaintId} onBack={() => navigate(role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign')}/>)}
             {screen === 'notifications' && <NotificationsScreen onOpenComplaint={openComplaint}/>}
-
-            {screen === 'reports' && <ReportsScreen />}
-            {screen === 'users' && <UserManagementScreen />}
+            {screen === 'reports' && <ReportsScreen/>}
+            {screen === 'users' && <UserManagementScreen/>}
             {screen === 'technician-jobs' && <TechnicianJobsScreen onOpenComplaint={openComplaint}/>}
             {screen === 'assign' && <AssignComplaintsScreen onOpenComplaint={openComplaint}/>}
             {screen === 'work-orders' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
             {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'profile' && <ProfileScreen />}
+            {screen === 'profile' && <ProfileScreen/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={openComplaint}/>}
           </ErrorBoundary>
         </main>
+
+        <nav className="campus-bottom-nav" aria-label="Primary navigation">
+          {bottomNav.left.map(renderNavButton)}
+          <button
+            type="button"
+            onClick={() => navigate(bottomNav.action.id)}
+            className={'campus-quick-action ' + (actionActive ? 'is-active' : '')}
+            aria-label={bottomNav.action.label}
+            aria-current={actionActive ? 'page' : undefined}
+          >
+            <ActionIcon size={role === 'student' ? 31 : 27}/>
+            <span>{bottomNav.action.label}</span>
+          </button>
+          {bottomNav.right.map(renderNavButton)}
+        </nav>
+      </div>
+
+      <div className={'campus-drawer-layer ' + (drawerOpen ? 'is-open' : '')} aria-hidden={!drawerOpen}>
+        <button type="button" className="campus-drawer-scrim" onClick={() => setDrawerOpen(false)} aria-label="Close app menu"/>
+        <aside className="campus-drawer" aria-label="All CampusFix sections">
+          <div className="campus-drawer-header">
+            <div className="campus-brand-mark"><ShieldCheck size={27} strokeWidth={2.5}/></div>
+            <div className="campus-drawer-brand"><strong>CampusFix</strong><span>Complaint &amp; Maintenance</span></div>
+            <button type="button" onClick={() => setDrawerOpen(false)} className="campus-icon-button" aria-label="Close app menu"><X size={21}/></button>
+          </div>
+
+          <div className="campus-drawer-user">
+            <div className="campus-drawer-avatar">{initials}</div>
+            <div><strong>{profile?.full_name || 'CampusFix User'}</strong><span>{profile?.college_id || ROLE_LABELS[role]}</span></div>
+          </div>
+
+          <nav className="campus-drawer-nav">
+            {items.map((item) => {
+                const Icon = item.icon;
+                const active = activeScreen === item.id;
+                return (<button key={item.id} type="button" onClick={() => navigate(item.id)} className={active ? 'is-active' : ''}>
+                  <span className="campus-drawer-icon"><Icon size={19}/></span>
+                  <span className="campus-drawer-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
+                  {item.id === 'notifications' && unreadNotifications > 0
+                    ? <span className="campus-drawer-count">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>
+                    : <ChevronRight size={17}/>}
+                </button>);
+            })}
+          </nav>
+
+          <button type="button" onClick={signOut} className="campus-sign-out"><LogOut size={18}/> Sign out</button>
+        </aside>
       </div>
     </div>);
 };

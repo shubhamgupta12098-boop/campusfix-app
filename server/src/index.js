@@ -10,7 +10,6 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dns from 'node:dns';
 import crypto from 'node:crypto';
-import nodemailer from 'nodemailer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../uploads');
@@ -122,80 +121,12 @@ const User = mongoose.model('auth_users', new mongoose.Schema({
   profile_id: { type: String, required: true }
 }, { timestamps: true, versionKey: false }), 'auth_users');
 
-const PasswordResetToken = mongoose.model('password_reset_tokens', new mongoose.Schema({
-  user_id: { type: String, required: true, index: true },
-  token_hash: { type: String, required: true, unique: true, index: true },
-  expires_at: { type: Date, required: true, index: { expires: 0 } },
-  used_at: { type: Date, default: null }
-}, { timestamps: true, versionKey: false }), 'password_reset_tokens');
-
-const mailTransport = () => {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
-  if (!host || !user || !pass) return null;
-  const gmail = /gmail\.com$/i.test(host);
-  return nodemailer.createTransport({
-    ...(gmail ? { service: 'gmail' } : { host }),
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
-    auth: { user: String(user).trim(), pass },
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 15_000,
-    greetingTimeout: 15_000,
-    socketTimeout: 20_000,
-  });
-};
-
-// Render free services cannot reliably connect to traditional SMTP ports.
-// Prefer Resend's HTTPS API (port 443), then fall back to SMTP for local/paid hosting.
-async function sendTransactionalEmail({ to, subject, text, html }) {
-  const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-  if (resendApiKey) {
-    const productName = process.env.APP_NAME || 'CampusFix CCMMS';
-    const from = String(process.env.RESEND_FROM || process.env.MAIL_FROM || `${productName} <onboarding@resend.dev>`).trim();
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'CampusFix/1.0',
-      },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
-      signal: AbortSignal.timeout(20_000),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = payload?.message || payload?.error || `Resend request failed with status ${response.status}`;
-      const error = new Error(message);
-      error.code = payload?.name || payload?.statusCode || response.status;
-      throw error;
-    }
-    return { provider: 'resend', id: payload?.id };
-  }
-
-  const transport = mailTransport();
-  if (!transport) {
-    const error = new Error('No email provider is configured. Add RESEND_API_KEY or SMTP settings.');
-    error.code = 'EMAIL_NOT_CONFIGURED';
-    throw error;
-  }
-  const productName = process.env.APP_NAME || 'CampusFix CCMMS';
-  const info = await transport.sendMail({
-    from: process.env.MAIL_FROM || `${productName} <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
-  return { provider: 'smtp', id: info.messageId };
-}
-
 const toPublic = (doc) => {
   const obj = doc?.toObject ? doc.toObject() : { ...doc };
   if (!obj) return obj;
-  obj.id = String(obj._id || obj.id);
+  // Preserve stable string ids used by categories/buildings; otherwise fall
+  // back to MongoDB's native id for ordinary records.
+  obj.id = String(obj.id || obj._id);
   delete obj._id;
   delete obj.__v;
   return obj;
@@ -336,8 +267,6 @@ async function enrich(collection, row) {
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
-
-const PASSWORD_ERROR = (msg) => { const e = new Error(msg); e.status = 400; return e; };
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
@@ -487,30 +416,31 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-// Keep uploads in MongoDB instead of Render's ephemeral filesystem.
+// Keep complaint photos and videos in MongoDB instead of Render's ephemeral filesystem.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!file.mimetype?.startsWith('image/')) return cb(new Error('Only image files are allowed.'));
+    const supported = file.mimetype?.startsWith('image/') || file.mimetype?.startsWith('video/');
+    if (!supported) return cb(new Error('Only photo and video files are allowed.'));
     cb(null, true);
   },
 });
 
-const singleImageUpload = (req, res, next) => {
+const singleMediaUpload = (req, res, next) => {
   upload.single('file')(req, res, (error) => {
     if (!error) return next();
     if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'Image must be smaller than 8 MB after processing.' });
+      return res.status(413).json({ error: 'Photo or video must be 20 MB or smaller.' });
     }
-    return res.status(400).json({ error: error.message || 'Image upload was rejected.' });
+    return res.status(400).json({ error: error.message || 'Media upload was rejected.' });
   });
 };
 
-app.post('/api/upload', auth, singleImageUpload, async (req, res) => {
+app.post('/api/upload', auth, singleMediaUpload, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-    if (!mongoose.connection.db) return res.status(503).json({ error: 'Image storage is not ready.' });
+    if (!req.file) return res.status(400).json({ error: 'A photo or video is required.' });
+    if (!mongoose.connection.db) return res.status(503).json({ error: 'Media storage is not ready.' });
 
     const extension = path.extname(req.file.originalname || '').toLowerCase() || '.jpg';
     const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${extension}`;
@@ -533,8 +463,8 @@ app.post('/api/upload', auth, singleImageUpload, async (req, res) => {
     const base = `${req.protocol}://${req.get('host')}`;
     res.status(201).json({ url: `${base}/uploads/${filename}` });
   } catch (error) {
-    console.error('Image upload failed:', error);
-    res.status(500).json({ error: error.message || 'Image upload failed.' });
+    console.error('Media upload failed:', error);
+    res.status(500).json({ error: error.message || 'Media upload failed.' });
   }
 });
 
@@ -567,6 +497,9 @@ app.post('/api/data/:collection', auth, async (req, res) => {
 app.patch('/api/data/:collection', auth, async (req, res) => {
   try {
     const filters = req.body.filters || [];
+    if (!Array.isArray(filters) || filters.length === 0) {
+      return res.status(400).json({ error: 'At least one filter is required for an update.' });
+    }
     const query = buildMongoQuery(filters);
     const result = await modelFor(req.params.collection).updateMany(query, { $set: { ...req.body.values, updated_at: new Date().toISOString() } });
     res.json({ matched: result.matchedCount, modified: result.modifiedCount });
@@ -575,11 +508,49 @@ app.patch('/api/data/:collection', auth, async (req, res) => {
 app.delete('/api/data/:collection', auth, async (req, res) => {
   try {
     const filters = req.body.filters || [];
+    if (!Array.isArray(filters) || filters.length === 0) {
+      return res.status(400).json({ error: 'At least one filter is required for a delete.' });
+    }
     const query = buildMongoQuery(filters);
     const result = await modelFor(req.params.collection).deleteMany(query);
     res.json({ deleted: result.deletedCount });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
+
+const DEFAULT_CATEGORIES = [
+  { id: 'electrical', name: 'Electrical', color: '#176fe5', sla_hours: 24 },
+  { id: 'plumbing', name: 'Plumbing', color: '#2d9a58', sla_hours: 24 },
+  { id: 'furniture', name: 'Furniture', color: '#8b5cf6', sla_hours: 72 },
+  { id: 'it-network', name: 'IT / Network', color: '#0ea5e9', sla_hours: 24 },
+  { id: 'cleanliness', name: 'Cleanliness', color: '#f59e0b', sla_hours: 12 },
+  { id: 'other', name: 'Other', color: '#64748b', sla_hours: 48 },
+];
+
+const DEFAULT_BUILDINGS = [
+  { id: 'main-block', name: 'Main Block' },
+  { id: 'academic-block', name: 'Academic Block' },
+  { id: 'hostel-a', name: 'Hostel A' },
+  { id: 'hostel-b', name: 'Hostel B' },
+  { id: 'library', name: 'Library' },
+];
+
+async function seedReferenceData() {
+  const now = new Date().toISOString();
+  const categories = modelFor('complaint_categories');
+  const buildings = modelFor('buildings');
+  await Promise.all([
+    ...DEFAULT_CATEGORIES.map(item => categories.updateOne(
+      { id: item.id },
+      { $setOnInsert: { ...item, created_at: now, updated_at: now } },
+      { upsert: true },
+    )),
+    ...DEFAULT_BUILDINGS.map(item => buildings.updateOne(
+      { id: item.id },
+      { $setOnInsert: { ...item, created_at: now, updated_at: now } },
+      { upsert: true },
+    )),
+  ]);
+}
 
 async function seedAdmin() {
   const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
@@ -637,6 +608,7 @@ async function connectMongoDB() {
 
 connectMongoDB().then(async () => {
   console.log('MongoDB connected');
+  await seedReferenceData();
   await seedAdmin();
   app.listen(PORT, () => console.log(`CampusFix API running on http://localhost:${PORT}`));
 }).catch(err => {

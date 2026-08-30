@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { onImageError } from '@/lib/constants';
-import { CheckCircle2, XCircle, Image, ShieldCheck, User, MapPin, Mail, Phone } from 'lucide-react';
+import { CheckCircle2, XCircle, Image, ShieldCheck, User, MapPin, Mail, Phone, Video } from 'lucide-react';
 export function ApprovalScreen({ onOpenComplaint }) {
     const { profile } = useAuthStore();
     const [orders, setOrders] = useState([]);
@@ -36,10 +36,12 @@ export function ApprovalScreen({ onOpenComplaint }) {
             return r.data;
         })();
         if (complaint) {
+            const completedAt = new Date().toISOString();
             await supabase.from('complaints').update({
                 status: approved ? 'closed' : 'in_progress',
-                closed_at: approved ? new Date().toISOString() : undefined,
-                updated_at: new Date().toISOString(),
+                closed_at: approved ? completedAt : undefined,
+                resolved_at: approved ? completedAt : complaint.resolved_at,
+                updated_at: completedAt,
             }).eq('id', complaint.id);
             await supabase.from('complaint_status_history').insert({
                 complaint_id: complaint.id,
@@ -49,10 +51,38 @@ export function ApprovalScreen({ onOpenComplaint }) {
                 changed_by_name: profile?.full_name,
                 remarks: note,
             });
-            await Promise.all([
-                supabase.from('notifications').insert({ user_id: complaint.user_id, title: approved ? 'Complaint Closed' : 'Work Sent Back', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }),
-                wo.technician_id ? supabase.from('notifications').insert({ user_id: wo.technician_id, title: approved ? 'Complaint Closed' : 'Rework Required', message: `${complaint.title} — ${note}`, type: 'approval', related_id: complaint.id }) : Promise.resolve(null),
-            ]);
+            const alerts = [];
+            if (approved) {
+                // A student gets exactly one notification for a complaint: when
+                // the completed work is approved. Re-opening/approving the same
+                // record cannot create a duplicate completion alert.
+                const existing = await supabase.from('notifications')
+                    .select('*')
+                    .eq('user_id', complaint.user_id)
+                    .eq('related_id', complaint.id)
+                    .eq('type', 'work_completed')
+                    .maybeSingle();
+                if (!existing.data) {
+                    alerts.push(supabase.from('notifications').insert({
+                        user_id: complaint.user_id,
+                        title: 'Work Completed',
+                        message: `${complaint.title} has been completed and approved. Tap to view the complaint details.`,
+                        type: 'work_completed',
+                        related_id: complaint.id,
+                        is_read: false,
+                    }));
+                }
+            }
+            if (wo.technician_id) {
+                alerts.push(supabase.from('notifications').insert({
+                    user_id: wo.technician_id,
+                    title: approved ? 'Work Approved' : 'Rework Required',
+                    message: `${complaint.title} — ${note}`,
+                    type: 'approval',
+                    related_id: complaint.id,
+                }));
+            }
+            await Promise.all(alerts);
         }
         setBusy(null);
         void load();
@@ -80,10 +110,11 @@ export function ApprovalScreen({ onOpenComplaint }) {
                   <p className="font-bold text-slate-800 mb-2">Complaint details</p>
                   <p className="text-slate-600">{wo.complaints.description}</p>
                   <p className="text-slate-500 flex items-center gap-1 mt-2"><MapPin className="w-3 h-3"/>{wo.complaints.buildings?.name || 'Location'}{wo.complaints.location_description ? ` · ${wo.complaints.location_description}` : ''}</p>
-                  {wo.complaints.photo_urls && wo.complaints.photo_urls.length > 0 && (<div className="flex gap-1.5 mt-2 flex-wrap">
-                      {wo.complaints.photo_urls.map((url, i) => (<a key={i} href={url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                  {((wo.complaints.photo_urls || []).length > 0 || (wo.complaints.video_urls || []).length > 0) && (<div className="flex gap-1.5 mt-2 flex-wrap">
+                      {(wo.complaints.photo_urls || []).map((url, i) => (<a key={`p-${i}`} href={url} target="_blank" rel="noreferrer" className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
                           <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
                         </a>))}
+                      {(wo.complaints.video_urls || []).map((url, i) => (<div key={`v-${i}`} className="w-20 rounded-lg overflow-hidden border border-slate-200 bg-black"><video src={url} controls preload="metadata" className="w-full h-12 object-contain"/><div className="flex items-center gap-1 bg-white px-1.5 py-1 text-[9px] text-slate-600"><Video className="w-3 h-3"/>Video</div></div>))}
                     </div>)}
                 </div>
               </div>)}

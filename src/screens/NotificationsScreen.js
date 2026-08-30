@@ -9,6 +9,7 @@ const TYPE_ICONS = {
     assigned: Clock,
     status_changed: CheckCircle2,
     resolved: CheckCircle2,
+    work_completed: CheckCircle2,
     feedback: MessageSquare,
     escalation: AlertCircle,
     info: Bell,
@@ -21,17 +22,23 @@ export function NotificationsScreen({ onOpenComplaint }) {
         void load();
     }, []);
     const load = async () => {
-        const { data } = await supabase
+        let query = supabase
             .from('notifications')
             .select('*')
-            .eq('user_id', profile?.id)
+            .eq('user_id', profile?.id);
+        if (profile?.role === 'student')
+            query = query.eq('type', 'work_completed');
+        const { data } = await query
             .order('created_at', { ascending: false })
             .limit(50);
         setNotifications((data || []));
         setLoading(false);
     };
     const markAllRead = async () => {
-        await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
+        let query = supabase.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
+        if (profile?.role === 'student')
+            query = query.eq('type', 'work_completed');
+        await query;
         void load();
     };
     const openNotification = async (notification) => {
@@ -54,7 +61,7 @@ export function NotificationsScreen({ onOpenComplaint }) {
             </button>)}/>
 
       {notifications.length === 0 ? (<Card className="p-0">
-          <EmptyState icon={Bell} title="No notifications" description="You'll see updates about your complaints here."/>
+          <EmptyState icon={Bell} title="No notifications" description={profile?.role === 'student' ? "You'll get one alert here when your complaint work is completed." : "You'll see work updates that need your attention here."}/>
         </Card>) : (<div className="space-y-2">
           {notifications.map((n) => {
                 const Icon = TYPE_ICONS[n.type] || Bell;

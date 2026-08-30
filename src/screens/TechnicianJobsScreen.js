@@ -4,7 +4,7 @@ import { uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
-import { Wrench, Clock, MapPin, CheckCircle2, Play, Camera, X, Image, FileText, Tag } from 'lucide-react';
+import { Wrench, Clock, MapPin, CheckCircle2, Play, Camera, X, Image, FileText, Tag, Video } from 'lucide-react';
 export function TechnicianJobsScreen({ onOpenComplaint }) {
     const { profile } = useAuthStore();
     const [complaints, setComplaints] = useState([]);
@@ -141,13 +141,6 @@ export function TechnicianJobsScreen({ onOpenComplaint }) {
                 changed_by: profile?.id,
                 remarks: 'Work started — before-repair photo captured',
             });
-            await supabase.from('notifications').insert({
-                user_id: startModal.user_id,
-                title: 'Work Started',
-                message: `${startModal.title} — Staff has started work on your complaint.`,
-                type: 'status_changed',
-                related_id: startModal.id,
-            });
             setStartModal(null);
             setBeforePhotos([]);
             void load();
@@ -207,13 +200,6 @@ export function TechnicianJobsScreen({ onOpenComplaint }) {
             new_status: 'waiting_approval',
             changed_by: profile?.id,
             remarks: repairNotes || 'Job completed',
-        });
-        await supabase.from('notifications').insert({
-            user_id: workModal.user_id,
-            title: 'Work Submitted for Approval',
-            message: `${workModal.title} — Staff has submitted completion evidence for admin verification.`,
-            type: 'approval_pending',
-            related_id: workModal.id,
         });
         const admins = await supabase.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
         await Promise.all((admins.data || []).map((admin) => supabase.from('notifications').insert({
@@ -277,7 +263,7 @@ export function TechnicianJobsScreen({ onOpenComplaint }) {
                       <Badge className={`${pc.bg} ${pc.color} border ${pc.border}`}>{pc.label}</Badge>
                       {c.buildings && <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/>{c.buildings.name}</span>}
                       {c.expected_completion && <span className="text-xs text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3"/>{formatDate(c.expected_completion)}</span>}
-                      {c.photo_urls && c.photo_urls.length > 0 && (<span className="text-xs text-slate-500 flex items-center gap-1"><Image className="w-3 h-3"/>{c.photo_urls.length} student photo{c.photo_urls.length > 1 ? 's' : ''}</span>)}
+                      {((c.photo_urls || []).length + (c.video_urls || []).length) > 0 && (<span className="text-xs text-slate-500 flex items-center gap-1"><Image className="w-3 h-3"/>{(c.photo_urls || []).length + (c.video_urls || []).length} student media</span>)}
                     </div>
                   </div>
                 </div>
@@ -323,12 +309,13 @@ export function TechnicianJobsScreen({ onOpenComplaint }) {
                 </div>
               </div>
 
-              {startModal.photo_urls && startModal.photo_urls.length > 0 && (<div className="mb-4">
-                  <p className="text-xs font-semibold text-slate-700 mb-2">Student's complaint photo — what needs to be fixed</p>
+              {((startModal.photo_urls || []).length > 0 || (startModal.video_urls || []).length > 0) && (<div className="mb-4">
+                  <p className="text-xs font-semibold text-slate-700 mb-2">Student complaint media — what needs to be fixed</p>
                   <div className="flex gap-2 overflow-x-auto">
-                    {startModal.photo_urls.map((url, i) => (<a key={i} href={url} target="_blank" rel="noreferrer" className="w-20 h-20 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                    {(startModal.photo_urls || []).map((url, i) => (<a key={`p-${i}`} href={url} target="_blank" rel="noreferrer" className="w-20 h-20 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
                         <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
                       </a>))}
+                    {(startModal.video_urls || []).map((url, i) => (<div key={`v-${i}`} className="w-28 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-black"><video src={url} controls preload="metadata" className="w-full h-20 object-contain"/><div className="flex items-center gap-1 bg-white px-2 py-1 text-[10px] text-slate-600"><Video className="w-3 h-3"/>Video</div></div>))}
                   </div>
                 </div>)}
 
@@ -362,12 +349,13 @@ export function TechnicianJobsScreen({ onOpenComplaint }) {
                 <button onClick={() => { setWorkModal(null); setWorkError(''); }} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
               </div>
               <p className="text-sm text-slate-600 mb-1">{workModal.title}</p>
-              {workModal.photo_urls && workModal.photo_urls.length > 0 && (<div className="mb-4">
-                  <p className="text-xs font-semibold text-slate-700 mb-2">Student's complaint photo</p>
+              {((workModal.photo_urls || []).length > 0 || (workModal.video_urls || []).length > 0) && (<div className="mb-4">
+                  <p className="text-xs font-semibold text-slate-700 mb-2">Student complaint media</p>
                   <div className="flex gap-2 overflow-x-auto">
-                    {workModal.photo_urls.map((url, i) => (<a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                    {(workModal.photo_urls || []).map((url, i) => (<a key={`p-${i}`} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
                         <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
                       </a>))}
+                    {(workModal.video_urls || []).map((url, i) => (<div key={`v-${i}`} className="w-24 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-black"><video src={url} controls preload="metadata" className="w-full h-16 object-contain"/></div>))}
                   </div>
                 </div>)}
               <textarea value={repairNotes} onChange={(e) => setRepairNotes(e.target.value)} rows={3} placeholder="Repair notes…" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm resize-none mb-3"/>

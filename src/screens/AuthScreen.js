@@ -63,7 +63,7 @@ export function AuthScreen() {
             setForgotError(result.error);
             return;
         }
-        setForgotNotice('A password reset link has been sent. Please check your inbox and Spam or Junk folder.');
+        setForgotNotice(result.message || 'A password reset link has been sent. Please check your inbox and Spam or Junk folder.');
     };
     const switchMode = () => {
         clearError();

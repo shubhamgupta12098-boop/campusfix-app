@@ -1,6 +1,4 @@
-// Neutral "image unavailable" placeholder shown when a photo URL fails to load
-// (e.g. the file was uploaded before the MongoDB/GridFS storage fix and no
-// longer exists). Keeps the UI clean instead of showing the browser's broken-image icon.
+// Neutral placeholder shown when a locally stored photo cannot be displayed.
 export const BROKEN_IMAGE_FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <rect width="100" height="100" fill="#f1f5f9"/>
     <path d="M30 65 L42 50 L52 60 L66 42 L74 65 Z" fill="#cbd5e1"/>

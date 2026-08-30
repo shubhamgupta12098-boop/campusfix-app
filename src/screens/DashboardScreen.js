@@ -87,6 +87,15 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
     const staff = profiles.filter((p) => p.role === 'staff');
     const students = profiles.filter((p) => p.role === 'student');
     const activeStaff = staff.filter((p) => p.is_active !== false).length;
+    const todayLabel = new Intl.DateTimeFormat('en-IN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date()).toUpperCase();
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = profile?.full_name?.split(' ')[0] || (isAdmin ? 'Administrator' : 'User');
     const maxCat = Math.max(...categoryStats.map((c) => c.count), 1);
     const maxBuilding = Math.max(...buildingStats.map((b) => b.count), 1);
     const statusPipeline = [
@@ -109,7 +118,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
     </div>);
     if (isAdmin) {
         return (<div className="max-w-7xl mx-auto">
-        <PageHeader title="Admin Dashboard" subtitle={`Welcome back, ${profile?.full_name?.split(' ')[0] || 'Administrator'} — here is today’s campus maintenance overview.`} action={<button onClick={() => onNavigate('assign')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-lg shadow-blue-600/20 transition-all">
+        <PageHeader eyebrow={todayLabel} title={greeting + ', ' + firstName} subtitle="Here is today’s campus maintenance overview." action={<button onClick={() => onNavigate('assign')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-lg shadow-blue-600/20 transition-all">
               <UserCog className="w-4 h-4"/>
               Assign Complaint
             </button>}/>
@@ -180,7 +189,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
       </div>);
     }
     return (<div className="max-w-7xl mx-auto">
-      <PageHeader title={`Welcome, ${profile?.full_name?.split(' ')[0] || 'User'}`} subtitle={isStaff ? 'Your assigned jobs and tasks' : 'Track your complaints and maintenance requests'} action={isStudent && (<button onClick={() => onNavigate('raise')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-lg shadow-blue-600/20 transition-all">
+      <PageHeader eyebrow={todayLabel} title={greeting + ', ' + firstName} subtitle={isStaff ? 'Your assigned jobs and tasks are ready.' : 'Here is what’s happening with your campus requests.'} action={isStudent && (<button onClick={() => onNavigate('raise')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-lg shadow-blue-600/20 transition-all">
             <PlusCircle className="w-4 h-4"/> New Complaint
           </button>)}/>
 

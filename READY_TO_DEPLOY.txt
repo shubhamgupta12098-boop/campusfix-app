@@ -1,7 +1,0 @@
-1) Firebase Console: enable Authentication > Email/Password.
-2) Add the Render frontend hostname under Firebase Authentication > Settings > Authorized domains.
-3) Frontend Render env: set VITE_API_URL and all VITE_FIREBASE_* values from Firebase Web App config.
-4) Backend Render env: set MONGODB_URI, CLIENT_URL, FIREBASE_WEB_API_KEY (same Web API key).
-5) Optional admin: set ADMIN_EMAIL and ADMIN_PASSWORD.
-6) Push to GitHub and deploy both Render services.
-7) RESEND_*, SMTP_*, MAIL_FROM and JWT_SECRET are no longer needed.

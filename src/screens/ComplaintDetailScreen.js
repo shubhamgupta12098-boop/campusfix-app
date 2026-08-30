@@ -3,7 +3,16 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, STATUS_FLOW, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
-import { ArrowLeft, MapPin, User, Wrench, Clock, Star, CheckCircle2, AlertCircle, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, MapPin, User, Wrench, Clock, Star, CheckCircle2, AlertCircle, LockKeyhole, X, Video, Pencil, ShieldCheck, Ban, Send } from 'lucide-react';
+const EDIT_CATEGORIES = [
+    { id: 'electrical', name: 'Electrical' },
+    { id: 'plumbing', name: 'Plumbing' },
+    { id: 'furniture', name: 'Furniture' },
+    { id: 'it-network', name: 'IT / Network' },
+    { id: 'cleanliness', name: 'Cleanliness' },
+    { id: 'other', name: 'Other' },
+];
+
 export function ComplaintDetailScreen({ complaintId, onBack }) {
     const { profile } = useAuthStore();
     const [complaint, setComplaint] = useState(null);
@@ -19,9 +28,30 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
     const [loadError, setLoadError] = useState('');
     const [closing, setClosing] = useState(false);
     const [closeMessage, setCloseMessage] = useState('');
+    const [editingComplaint, setEditingComplaint] = useState(false);
+    const [editTitle, setEditTitle] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editCategoryId, setEditCategoryId] = useState('electrical');
+    const [editPriority, setEditPriority] = useState('medium');
+    const [editLocation, setEditLocation] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editMessage, setEditMessage] = useState('');
+    const [technicians, setTechnicians] = useState([]);
+    const [selectedTech, setSelectedTech] = useState('');
+    const [reviewing, setReviewing] = useState(false);
+    const [assigningStaff, setAssigningStaff] = useState(false);
+    const [adminMessage, setAdminMessage] = useState('');
     const role = profile?.role ?? 'student';
     const canFeedback = role === 'student' && (complaint?.status === 'resolved' || complaint?.status === 'closed') && complaint?.user_id === profile?.id && !complaint?.feedback_rating;
+    const canEditComplaint = role === 'student' && complaint?.user_id === profile?.id && complaint?.status === 'submitted' && !complaint?.admin_viewed_at;
     useEffect(() => {
+        setFeedbackOpen(false);
+        setRating(0);
+        setHoverRating(0);
+        setComment('');
+        setEditingComplaint(false);
+        setEditMessage('');
+        setAdminMessage('');
         void load();
     }, [complaintId]);
     const load = async () => {
@@ -38,7 +68,30 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             setLoading(false);
             return;
         }
-        setComplaint(data);
+        let loadedComplaint = data;
+        if (role === 'admin' && data?.status === 'submitted' && !data?.admin_viewed_at && profile?.id) {
+            const viewedAt = new Date().toISOString();
+            await supabase.from('complaints').update({
+                admin_viewed_at: viewedAt,
+                admin_viewed_by: profile.id,
+                admin_review_status: 'pending',
+            }).eq('id', complaintId);
+            loadedComplaint = { ...data, admin_viewed_at: viewedAt, admin_viewed_by: profile.id, admin_review_status: 'pending' };
+        }
+        const shouldShowRatingOnce = role === 'student'
+            && (data?.status === 'resolved' || data?.status === 'closed')
+            && data?.user_id === profile?.id
+            && !data?.feedback_rating
+            && !data?.rating_prompt_shown_at;
+        if (shouldShowRatingOnce) {
+            const shownAt = new Date().toISOString();
+            await supabase.from('complaints').update({ rating_prompt_shown_at: shownAt }).eq('id', complaintId);
+            loadedComplaint = { ...data, rating_prompt_shown_at: shownAt };
+            // Give the student a moment to see the completed complaint detail,
+            // then show the rating prompt. It is automatically shown only once.
+            window.setTimeout(() => setFeedbackOpen(true), 500);
+        }
+        setComplaint(loadedComplaint);
         const { data: histData } = await supabase
             .from('complaint_status_history')
             .select('*, profiles!changed_by(full_name)')
@@ -59,7 +112,149 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             .eq('complaint_id', complaintId)
             .order('created_at', { ascending: false });
         setWorkOrder((workOrders || [])[0] || null);
+        if (role === 'admin') {
+            const { data: staffData } = await supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true);
+            setTechnicians(staffData || []);
+            setSelectedTech(loadedComplaint?.assigned_to || '');
+        }
+        else {
+            setTechnicians([]);
+            setSelectedTech('');
+        }
         setLoading(false);
+    };
+    const openEditComplaint = () => {
+        if (!canEditComplaint || !complaint)
+            return;
+        setEditTitle(complaint.title || '');
+        setEditDescription(complaint.description || '');
+        setEditCategoryId(complaint.category_id || 'electrical');
+        setEditPriority(complaint.priority || 'medium');
+        setEditLocation(complaint.location_description || '');
+        setEditMessage('');
+        setEditingComplaint(true);
+    };
+    const saveComplaintEdit = async () => {
+        if (!complaint || !profile?.id || savingEdit)
+            return;
+        if (!editTitle.trim() || !editDescription.trim() || !editLocation.trim()) {
+            setEditMessage('Title, description and location are required.');
+            return;
+        }
+        if (((complaint.photo_urls || []).length + (complaint.video_urls || []).length) < 1) {
+            setEditMessage('At least one photo or video is required for every complaint.');
+            return;
+        }
+        setSavingEdit(true);
+        setEditMessage('');
+        const latest = await supabase.from('complaints').select('*').eq('id', complaint.id).maybeSingle();
+        if (latest.error || !latest.data) {
+            setSavingEdit(false);
+            setEditMessage(latest.error?.message || 'Complaint could not be checked.');
+            return;
+        }
+        if (latest.data.admin_viewed_at || latest.data.status !== 'submitted') {
+            setSavingEdit(false);
+            setEditingComplaint(false);
+            setEditMessage('Editing is locked because an admin has already viewed this complaint.');
+            await load();
+            return;
+        }
+        const category = EDIT_CATEGORIES.find((item) => item.id === editCategoryId) || EDIT_CATEGORIES[0];
+        const editedAt = new Date().toISOString();
+        const result = await supabase.from('complaints').update({
+            title: editTitle.trim(),
+            description: editDescription.trim(),
+            category_id: category.id,
+            category_name: category.name,
+            priority: editPriority,
+            location_description: editLocation.trim(),
+            student_last_edited_at: editedAt,
+        }).eq('id', complaint.id);
+        if (!result.error) {
+            await supabase.from('complaint_status_history').insert({
+                complaint_id: complaint.id,
+                old_status: 'submitted',
+                new_status: 'submitted',
+                changed_by: profile.id,
+                remarks: 'Complaint details edited by student before admin review.',
+            });
+        }
+        setSavingEdit(false);
+        if (result.error) {
+            setEditMessage(result.error.message || 'Complaint could not be updated.');
+            return;
+        }
+        setEditingComplaint(false);
+        await load();
+    };
+    const reviewComplaint = async (isGenuine) => {
+        if (role !== 'admin' || !complaint || complaint.status !== 'submitted' || !profile?.id || reviewing)
+            return;
+        setReviewing(true);
+        setAdminMessage('');
+        const now = new Date().toISOString();
+        const nextStatus = isGenuine ? 'verified' : 'rejected';
+        const result = await supabase.from('complaints').update({
+            status: nextStatus,
+            admin_review_status: isGenuine ? 'approved' : 'rejected',
+            admin_reviewed_at: now,
+            admin_reviewed_by: profile.id,
+            ...(isGenuine ? { verified_at: now } : { rejected_at: now, rejection_reason: 'Admin marked this complaint as not genuine.' }),
+        }).eq('id', complaint.id);
+        if (!result.error) {
+            await supabase.from('complaint_status_history').insert({
+                complaint_id: complaint.id,
+                old_status: 'submitted',
+                new_status: nextStatus,
+                changed_by: profile.id,
+                remarks: isGenuine ? 'Admin reviewed the complaint and confirmed it is genuine.' : 'Admin reviewed the complaint and marked it as not genuine.',
+            });
+        }
+        setReviewing(false);
+        if (result.error) {
+            setAdminMessage(result.error.message || 'Admin review could not be saved.');
+            return;
+        }
+        setAdminMessage(isGenuine ? 'Complaint verified. You can now assign staff.' : 'Complaint rejected. No staff was notified.');
+        await load();
+    };
+    const assignReviewedComplaint = async () => {
+        if (role !== 'admin' || !complaint || !selectedTech || assigningStaff || !['verified', 'assigned'].includes(complaint.status))
+            return;
+        setAssigningStaff(true);
+        setAdminMessage('');
+        const selected = technicians.find((item) => item.id === selectedTech);
+        const now = new Date().toISOString();
+        const result = await supabase.from('complaints').update({
+            status: 'assigned',
+            assigned_to: selectedTech,
+            assigned_at: now,
+        }).eq('id', complaint.id);
+        if (!result.error) {
+            await supabase.from('complaint_status_history').insert({
+                complaint_id: complaint.id,
+                old_status: complaint.status,
+                new_status: 'assigned',
+                changed_by: profile.id,
+                remarks: `Assigned to ${selected?.full_name || 'staff'} after admin verification.`,
+            });
+            await supabase.from('notifications').insert({
+                user_id: selectedTech,
+                title: 'New Job Assigned',
+                message: `${complaint.complaint_no}: ${complaint.title}`,
+                type: 'assigned',
+                related_id: complaint.id,
+                is_read: false,
+            });
+        }
+        setAssigningStaff(false);
+        if (result.error) {
+            setAdminMessage(result.error.message || 'Staff could not be assigned.');
+            return;
+        }
+        setAdminMessage(`Assigned to ${selected?.full_name || 'staff'}. Staff notification has now been sent.`);
+        await load();
     };
     const canClose = !!complaint && complaint.status !== 'closed' && ((role === 'admin' && ['waiting_approval', 'resolved'].includes(complaint.status)) ||
         (role === 'student' && complaint.status === 'resolved' && complaint.user_id === profile?.id));
@@ -84,13 +279,6 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
                 changed_by: profile.id,
                 changed_by_name: profile.full_name,
                 remarks: role === 'admin' ? 'Complaint closed by administrator.' : 'Complaint closed by student.',
-            });
-            await supabase.from('notifications').insert({
-                user_id: complaint.user_id,
-                title: 'Complaint Closed',
-                message: `${complaint.title} has been closed.`,
-                type: 'closed',
-                related_id: complaint.id,
             });
         }
         setClosing(false);
@@ -137,9 +325,9 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
       </div>);
     }
     const displayStatus = complaint.status === 'resolved' ? 'closed' : complaint.status;
-    const sc = STATUS_CONFIG[displayStatus];
-    const pc = PRIORITY_CONFIG[complaint.priority];
-    const currentStepIndex = STATUS_FLOW.indexOf(displayStatus);
+    const sc = STATUS_CONFIG[displayStatus] || STATUS_CONFIG.submitted;
+    const pc = PRIORITY_CONFIG[complaint.priority] || PRIORITY_CONFIG.medium;
+    const currentStepIndex = displayStatus === 'rejected' ? 0 : STATUS_FLOW.indexOf(displayStatus);
     return (<div className="max-w-4xl mx-auto">
       <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 font-medium">
         <ArrowLeft className="w-4 h-4"/>
@@ -157,10 +345,14 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             <p className="text-sm text-slate-500 mt-0.5">{complaint.complaint_no} · {complaint.complaint_categories?.name}</p>
           </div>
         </div>
-        <Badge className={`${sc.bg} ${sc.color} text-sm`}>
-          <span className={`w-2 h-2 rounded-full ${sc.dot}`}/>
-          {sc.label}
-        </Badge>
+        <div className="flex flex-col items-end gap-2">
+          <Badge className={`${sc.bg} ${sc.color} text-sm`}>
+            <span className={`w-2 h-2 rounded-full ${sc.dot}`}/>
+            {sc.label}
+          </Badge>
+          {canEditComplaint && <button type="button" onClick={openEditComplaint} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"><Pencil className="w-3.5 h-3.5"/>Edit Complaint</button>}
+          {role === 'student' && complaint.user_id === profile?.id && complaint.status === 'submitted' && complaint.admin_viewed_at && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500"><LockKeyhole className="w-3.5 h-3.5"/>Editing locked after admin view</span>}
+        </div>
       </div>
 
       {/* Status tracker */}
@@ -184,6 +376,35 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         </div>
       </Card>
 
+      {role === 'admin' && (<Card className={`p-5 mb-5 border ${complaint.status === 'rejected' ? 'border-red-200 bg-red-50' : complaint.status === 'verified' || complaint.status === 'assigned' ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-white'}`}>
+          <div className="flex items-start gap-3">
+            <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${complaint.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}><ShieldCheck className="w-5 h-5"/></div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-bold text-slate-900">Admin Complaint Verification</h3>
+              {complaint.status === 'submitted' && (<>
+                  <p className="mt-1 text-xs text-slate-600">You have opened the complaint detail, so student editing is now locked. Check the description and evidence below, then confirm whether this is a genuine complaint.</p>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button type="button" disabled={reviewing} onClick={() => void reviewComplaint(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><Ban className="w-4 h-4"/>No — Reject Complaint</button>
+                    <button type="button" disabled={reviewing} onClick={() => void reviewComplaint(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"><CheckCircle2 className="w-4 h-4"/>{reviewing ? 'Saving…' : 'Yes — Genuine Complaint'}</button>
+                  </div>
+                </>)}
+              {complaint.status === 'rejected' && <p className="mt-1 text-xs font-semibold text-red-700">Marked as not genuine. No staff assignment or staff notification was created.</p>}
+              {['verified', 'assigned'].includes(complaint.status) && (<div className="mt-3">
+                  <p className="text-xs font-semibold text-emerald-800">Verified as genuine. Staff can be assigned now.</p>
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <select value={selectedTech} onChange={(event) => setSelectedTech(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                      <option value="">Select staff member</option>
+                      {technicians.map((tech) => <option key={tech.id} value={tech.id}>{tech.full_name} — {tech.department || 'Maintenance'}</option>)}
+                    </select>
+                    <button type="button" disabled={!selectedTech || assigningStaff} onClick={() => void assignReviewedComplaint()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4"/>{assigningStaff ? 'Assigning…' : complaint.status === 'assigned' ? 'Reassign Staff' : 'Assign Staff'}</button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">Staff receives a notification only after this assignment.</p>
+                </div>)}
+              {adminMessage && <p className={`mt-3 text-xs font-semibold ${adminMessage.includes('could not') ? 'text-red-700' : 'text-slate-700'}`}>{adminMessage}</p>}
+            </div>
+          </div>
+        </Card>)}
+
       {(canClose || complaint.status === 'closed' || closeMessage) && (<Card className={`p-4 mb-5 border ${complaint.status === 'closed' ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -202,11 +423,16 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{complaint.description}</p>
           </Card>
 
-          {complaint.photo_urls && complaint.photo_urls.length > 0 && (<Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-1">Student Complaint Photos</h3><p className="text-xs text-slate-500 mb-3">These photos were uploaded by the student with the complaint.</p>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {complaint.photo_urls.map((url, idx) => (<div key={idx} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
-                    <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
+          {((complaint.photo_urls || []).length > 0 || (complaint.video_urls || []).length > 0) && (<Card className="p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Student Complaint Media</h3>
+              <p className="text-xs text-slate-500 mb-3">Photos and videos uploaded with the complaint.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {(complaint.photo_urls || []).map((url, idx) => (<a key={`photo-${idx}`} href={url} target="_blank" rel="noreferrer" className="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    <img src={url} alt={`Complaint photo ${idx + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
+                  </a>))}
+                {(complaint.video_urls || []).map((url, idx) => (<div key={`video-${idx}`} className="rounded-xl overflow-hidden border border-slate-200 bg-black">
+                    <video src={url} controls preload="metadata" className="w-full aspect-video object-contain" aria-label={`Complaint video ${idx + 1}`}/>
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-600"><Video className="w-3.5 h-3.5"/>Video {idx + 1}</div>
                   </div>))}
               </div>
             </Card>)}
@@ -298,24 +524,27 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
               </div>
             </Card>)}
 
-          {feedbackOpen && (<Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-1">Rate Staff Work</h3>
-              <p className="mb-3 text-xs text-slate-500">1 star = poor, 5 stars = excellent</p>
-              <div className="flex items-center gap-1 mb-4">
-                {[1, 2, 3, 4, 5].map((n) => (<button key={n} onMouseEnter={() => setHoverRating(n)} onMouseLeave={() => setHoverRating(0)} onClick={() => setRating(n)}>
-                    <Star className={`w-8 h-8 transition-colors ${(hoverRating || rating) >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-300'}`}/>
+          {feedbackOpen && canFeedback && (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-label="Rate completed complaint">
+              <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">How was the completed work?</h3>
+                    <p className="mt-1 text-xs text-slate-500">You have viewed the complaint details. Please rate the completed work from 1 to 5 stars.</p>
+                  </div>
+                  <button type="button" onClick={() => setFeedbackOpen(false)} className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50" aria-label="Close rating popup"><X className="w-4 h-4"/></button>
+                </div>
+                <div className="my-5 flex items-center justify-center gap-2">
+                  {[1, 2, 3, 4, 5].map((n) => (<button type="button" key={n} onMouseEnter={() => setHoverRating(n)} onMouseLeave={() => setHoverRating(0)} onClick={() => setRating(n)} aria-label={`${n} star rating`}>
+                    <Star className={`w-10 h-10 transition-colors ${(hoverRating || rating) >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300 hover:text-amber-300'}`}/>
                   </button>))}
+                </div>
+                <textarea value={comment} onChange={(e) => setComment(e.target.value.slice(0, 500))} maxLength={500} rows={3} placeholder="Optional feedback about the work…" className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 resize-none"/>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setFeedbackOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Maybe Later</button>
+                  <button type="button" onClick={submitFeedback} disabled={submittingFeedback || rating < 1} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{submittingFeedback ? 'Submitting…' : 'Submit Rating'}</button>
+                </div>
               </div>
-              <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Share your feedback about the staff's work, quality, and behavior…" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 text-sm text-slate-900 resize-none mb-3"/>
-              <div className="flex gap-2">
-                <button onClick={submitFeedback} disabled={submittingFeedback || rating < 1} className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
-                  {submittingFeedback ? 'Submitting…' : 'Submit'}
-                </button>
-                <button onClick={() => setFeedbackOpen(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50">
-                  Cancel
-                </button>
-              </div>
-            </Card>)}
+            </div>)}
         </div>
 
         {/* Right - meta */}
@@ -369,6 +598,31 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             </Card>)}
         </div>
       </div>
+
+      {editingComplaint && canEditComplaint && (<div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true" aria-label="Edit complaint">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Edit Complaint</h3>
+                <p className="mt-1 text-xs text-slate-500">You can edit this complaint only until an admin opens it.</p>
+              </div>
+              <button type="button" onClick={() => setEditingComplaint(false)} className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"><X className="w-4 h-4"/></button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div><label className="mb-1 block text-xs font-semibold text-slate-700">Title *</label><input value={editTitle} onChange={(event) => setEditTitle(event.target.value.slice(0, 120))} maxLength={120} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label className="mb-1 block text-xs font-semibold text-slate-700">Category *</label><select value={editCategoryId} onChange={(event) => setEditCategoryId(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">{EDIT_CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+              <div><label className="mb-1 block text-xs font-semibold text-slate-700">Description *</label><textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value.slice(0, 500))} rows={4} maxLength={500} className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label className="mb-1 block text-xs font-semibold text-slate-700">Location *</label><input value={editLocation} onChange={(event) => setEditLocation(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label className="mb-2 block text-xs font-semibold text-slate-700">Priority</label><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">{['low', 'medium', 'high', 'emergency'].map((item) => { const config = PRIORITY_CONFIG[item]; return <button key={item} type="button" onClick={() => setEditPriority(item)} className={`rounded-lg border px-2 py-2 text-xs font-semibold ${editPriority === item ? `${config.bg} ${config.color} border-current` : 'border-slate-200 bg-white text-slate-500'}`}>{config.label}</button>; })}</div></div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">Uploaded photo/video evidence stays attached and remains mandatory.</div>
+              {editMessage && <p className="text-xs font-semibold text-red-700">{editMessage}</p>}
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setEditingComplaint(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button type="button" disabled={savingEdit} onClick={() => void saveComplaintEdit()} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{savingEdit ? 'Saving…' : 'Save Changes'}</button>
+            </div>
+          </div>
+        </div>)}
     </div>);
 }
 function DetailRow({ icon: Icon, label, value }) {

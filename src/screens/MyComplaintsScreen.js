@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
-import { ClipboardList, Search, Wrench, Filter } from 'lucide-react';
+import { ClipboardList, Search, Wrench, Filter, Pencil, LockKeyhole } from 'lucide-react';
 export function MyComplaintsScreen({ onOpenComplaint }) {
     const { profile } = useAuthStore();
     const [complaints, setComplaints] = useState([]);
@@ -95,9 +95,11 @@ export function MyComplaintsScreen({ onOpenComplaint }) {
                         </div>
                       </div>
                       <p className="text-xs text-slate-600 mt-2 line-clamp-2">{c.description}</p>
-                      <div className="flex items-center gap-2 mt-2.5">
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <Badge className={`${pc.bg} ${pc.color} border ${pc.border}`}>{pc.label}</Badge>
                         {c.buildings && <span className="text-xs text-slate-500">{c.buildings.name}</span>}
+                        {c.status === 'submitted' && !c.admin_viewed_at && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700"><Pencil className="w-3 h-3"/>Editable until admin views</span>}
+                        {c.status === 'submitted' && c.admin_viewed_at && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600"><LockKeyhole className="w-3 h-3"/>Admin viewed · editing locked</span>}
                         {c.escalation_level > 0 && <Badge className="bg-red-50 text-red-700">Escalated L{c.escalation_level}</Badge>}
                       </div>
                     </div>

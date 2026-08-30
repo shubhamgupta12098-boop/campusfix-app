@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
-import { ClipboardList, Wrench, MapPin, User, X, Send, Image } from 'lucide-react';
+import { ClipboardList, Wrench, MapPin, User, X, Send, Image, Video } from 'lucide-react';
 export function AssignComplaintsScreen({ onOpenComplaint }) {
     const { profile } = useAuthStore();
     const [complaints, setComplaints] = useState([]);
@@ -41,19 +41,13 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
             setLoading(false);
         }
     };
-    const verify = async (c) => {
-        await supabase.from('complaints').update({ status: 'verified', updated_at: new Date().toISOString() }).eq('id', c.id);
-        await supabase.from('complaint_status_history').insert({
-            complaint_id: c.id, old_status: c.status, new_status: 'verified', changed_by: profile?.id, remarks: 'Complaint verified',
-        });
-        await supabase.from('notifications').insert({
-            user_id: c.user_id, title: 'Complaint Verified', message: `${c.title} has been verified and is pending assignment.`, type: 'status_changed', related_id: c.id,
-        });
-        void load();
-    };
     const assign = async () => {
         if (!assignModal || !selectedTech || assigning)
             return;
+        if (!['verified', 'assigned'].includes(assignModal.status)) {
+            setError('Open the complaint detail first and mark it as a genuine complaint before assigning staff.');
+            return;
+        }
         setAssigning(true);
         setError('');
         try {
@@ -66,10 +60,13 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
             await supabase.from('complaint_status_history').insert({
                 complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: `Assigned to ${chosenStaff?.full_name || 'staff'}`,
             });
-            await supabase.from('notifications').insert([
-                { user_id: selectedTech, title: 'New Job Assigned', message: assignModal.title, type: 'assigned', related_id: assignModal.id },
-                { user_id: assignModal.user_id, title: 'Technician Assigned', message: `${assignModal.title} — a technician has been assigned.`, type: 'assigned', related_id: assignModal.id },
-            ]);
+            await supabase.from('notifications').insert({
+                user_id: selectedTech,
+                title: 'New Job Assigned',
+                message: assignModal.title,
+                type: 'assigned',
+                related_id: assignModal.id,
+            });
             // Update technician workload
             await supabase.from('technicians').update({ current_workload: (technicians.find((t) => t.id === selectedTech)?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
             setAssignModal(null);
@@ -86,7 +83,7 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
     if (loading)
         return <Spinner />;
     return (<div className="max-w-4xl mx-auto">
-      <PageHeader title="Assign Complaints" subtitle={`${complaints.length} pending complaints`}/>
+      <PageHeader title="Assign Complaints" subtitle="Admin review is required before any complaint can be assigned to staff"/>
 
       {error && (<Card className="p-4 mb-4 border border-red-200 bg-red-50">
           <p className="text-sm font-semibold text-red-700">Assigned complaints could not be loaded</p>
@@ -116,7 +113,7 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
                       <Badge className={`${pc.bg} ${pc.color} border ${pc.border}`}>{pc.label}</Badge>
                       {c.buildings && <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/>{c.buildings.name}</span>}
                       {c.assigned_profile && <span className="text-xs text-slate-500 flex items-center gap-1"><User className="w-3 h-3"/>{c.assigned_profile.full_name}</span>}
-                      {c.photo_urls && c.photo_urls.length > 0 && (<span className="text-xs text-slate-500 flex items-center gap-1"><Image className="w-3 h-3"/>{c.photo_urls.length} photo{c.photo_urls.length > 1 ? 's' : ''}</span>)}
+                      {((c.photo_urls || []).length + (c.video_urls || []).length) > 0 && (<span className="text-xs text-slate-500 flex items-center gap-1"><Image className="w-3 h-3"/>{(c.photo_urls || []).length + (c.video_urls || []).length} media</span>)}
                     </div>
                   </div>
                 </div>
@@ -124,12 +121,12 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
                   <button onClick={() => onOpenComplaint(c.id)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50">
                     View Full Detail
                   </button>
-                  {c.status === 'submitted' && (<button onClick={() => verify(c)} className="flex-1 py-2 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100">
-                      Verify
+                  {c.status === 'submitted' ? (<div className="flex-1 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                      <span className="text-xs font-semibold text-amber-800">Review complaint detail first</span>
+                      <button onClick={() => onOpenComplaint(c.id)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">Review</button>
+                    </div>) : (<button onClick={() => { setSelectedTech(c.assigned_to || ''); setAssignModal(c); }} className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                      {c.assigned_to ? 'Reassign Staff' : 'Assign Staff'}
                     </button>)}
-                  <button onClick={() => { setSelectedTech(c.assigned_to || ''); setAssignModal(c); }} className="flex-1 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700">
-                    {c.assigned_to ? 'Reassign' : 'Assign Technician'}
-                  </button>
                 </div>
               </Card>);
             })}
@@ -146,10 +143,12 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
               <p className="text-sm text-slate-600 mb-1">{assignModal.title}</p>
               <p className="text-xs text-slate-400 mb-2">{assignModal.complaint_categories?.name} · {(PRIORITY_CONFIG[assignModal.priority] || PRIORITY_CONFIG.medium).label}</p>
               <p className="text-xs text-slate-600 mb-3 line-clamp-3">{assignModal.description}</p>
-              {assignModal.photo_urls && assignModal.photo_urls.length > 0 && (<div className="flex gap-2 mb-4 overflow-x-auto">
-                  {assignModal.photo_urls.map((url, i) => (<a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">Admin verified this complaint as genuine. Staff notification will be sent only after assignment.</div>
+              {((assignModal.photo_urls || []).length > 0 || (assignModal.video_urls || []).length > 0) && (<div className="flex gap-2 mb-4 overflow-x-auto">
+                  {(assignModal.photo_urls || []).map((url, i) => (<a key={`p-${i}`} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
                       <img src={url} alt={`Complaint photo ${i + 1}`} className="w-full h-full object-cover" onError={onImageError}/>
                     </a>))}
+                  {(assignModal.video_urls || []).map((url, i) => (<div key={`v-${i}`} className="w-24 flex-shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-black"><video src={url} controls preload="metadata" className="w-full h-16 object-contain"/><div className="flex items-center gap-1 bg-white px-2 py-1 text-[10px] text-slate-600"><Video className="w-3 h-3"/>Video</div></div>))}
                 </div>)}
               <button onClick={() => onOpenComplaint(assignModal.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 mb-4 -mt-1 block">
                 View full complaint detail →

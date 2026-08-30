@@ -10,7 +10,13 @@ services:
         sync: false
       - key: CLIENT_URL
         sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 30d
       - key: FIREBASE_WEB_API_KEY
+        sync: false
+      - key: RESET_PASSWORD_URL
         sync: false
       - key: ADMIN_EMAIL
         sync: false
@@ -24,18 +30,6 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        sync: false
-      - key: VITE_FIREBASE_API_KEY
-        sync: false
-      - key: VITE_FIREBASE_AUTH_DOMAIN
-        sync: false
-      - key: VITE_FIREBASE_PROJECT_ID
-        sync: false
-      - key: VITE_FIREBASE_STORAGE_BUCKET
-        sync: false
-      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
-        sync: false
-      - key: VITE_FIREBASE_APP_ID
         sync: false
     routes:
       - type: rewrite
