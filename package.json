@@ -1,8 +1,8 @@
 {
   "name": "ccmms-fullstack-mobile",
   "private": true,
-  "version": "3.0.0",
-  "description": "CCMMS Student, Admin and Staff mobile portals with Express API, MongoDB and Firebase password reset.",
+  "version": "3.1.0",
+  "description": "CCMMS unified login with role-based Student, Admin and Staff mobile portals, Express API, MongoDB and Firebase password reset.",
   "engines": {
     "node": ">=20 <25"
   },
