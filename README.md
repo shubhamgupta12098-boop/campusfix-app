@@ -1,89 +1,185 @@
-# CampusFix Full-Stack
+# CCMMS Full Stack — Student + Admin + Staff
 
-This package keeps the existing CampusFix light UI and connects it to an Express API, MongoDB Atlas and Firebase password-reset email.
+Production-ready web app with three mobile portals in one repository:
 
-## Included
+- `/student/` — raise complaints, upload mandatory photo + optional video, track status, rate completed work
+- `/admin/` — genuine Yes/No review, staff assignment, approvals, reports, users, complaint/work evidence
+- `/staff/` — assigned jobs, alerts, before/after photos, completion notes
+- `/api/` — Express REST API
+- MongoDB — all users, complaints, notifications, work orders and evidence metadata
+- MongoDB GridFS — uploaded photos/videos
+- Firebase Authentication — **only Forgot Password email/reset flow**
 
-- React + Vite frontend with the existing design
-- Student and staff signup; admin accounts are created from server configuration
-- MongoDB-backed profiles, complaints, work orders, notifications and reports
-- JWT login sessions
-- Firebase password-reset email flow
-- Photo and video evidence stored in MongoDB GridFS
-- Admin verification before staff assignment
+## 1. Requirements
 
-The login page no longer displays the local Student, Staff or Admin quick-account buttons. Public signup follows the original second-project flow and offers Student and Staff roles; Admin is never offered on public signup.
+- Node.js 20 LTS or newer
+- npm 10+
+- MongoDB Atlas account (recommended) or local MongoDB
+- Firebase project with Email/Password Authentication enabled
 
-## Run locally
+This is a React/Vite + Node web app, so **Gradle is not required**. The production build is handled by npm/Vite and is already configured for Render.
 
-Requirements: Node.js 18 or newer and a MongoDB database.
+## 2. Install
 
-1. Copy `.env.example` to `.env`.
-2. Copy `server/.env.example` to `server/.env` and fill in the values.
-3. Install both frontend and backend dependencies:
-
-   ```bash
-   npm run install:all
-   ```
-
-4. Start the API in one terminal:
-
-   ```bash
-   npm run server
-   ```
-
-5. Start the frontend in another terminal:
-
-   ```bash
-   npm run dev
-   ```
-
-The frontend opens at `http://localhost:5173` and uses `http://localhost:5000/api` by default.
-
-## Required backend settings
-
-Set these in `server/.env`:
-
-```env
-MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster.mongodb.net/campusfix?retryWrites=true&w=majority
-CLIENT_URL=http://localhost:5173
-JWT_SECRET=replace_with_a_long_random_secret
-FIREBASE_WEB_API_KEY=your_firebase_web_api_key
-RESET_PASSWORD_URL=http://localhost:5173
-ADMIN_EMAIL=admin@your-campus.edu
-ADMIN_PASSWORD=use_a_strong_password
+```bash
+npm install
 ```
 
-`ADMIN_EMAIL` and `ADMIN_PASSWORD` seed the first admin account only when it does not already exist. Students and staff can create accounts from the signup form.
+Copy environment file:
 
-## Firebase setup
+Windows:
 
-1. Create or open a Firebase project.
-2. In Authentication, enable Email/Password.
-3. Copy the Web API key into `FIREBASE_WEB_API_KEY` on the backend.
-4. Add the frontend hostname under Authentication authorized domains.
-5. Configure the password-reset template/action URL to point to the frontend URL in `RESET_PASSWORD_URL`.
+```bat
+copy .env.example .env
+```
 
-Firebase is used only to deliver and verify password-reset links. MongoDB remains the source of truth for accounts and application data.
+macOS/Linux:
 
-## Render deployment
+```bash
+cp .env.example .env
+```
 
-`render.yaml` defines both services:
+Then edit `.env`.
 
-- `campusfix-api`: Node/Express service from `server/`
-- `campusfix-web`: Vite static frontend from the project root
+## 3. MongoDB Atlas
 
-Set `MONGODB_URI`, `CLIENT_URL`, `FIREBASE_WEB_API_KEY`, `RESET_PASSWORD_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and frontend `VITE_API_URL` in Render. Use the API service URL for `VITE_API_URL`, for example `https://your-api.onrender.com/api`.
+1. Create a MongoDB Atlas cluster.
+2. Create a Database User.
+3. Network Access: allow your development IP. For Render, allow Render outbound access; for a simple demo you can use `0.0.0.0/0` with a strong DB username/password.
+4. Copy the connection string into:
 
-After deployment, check `https://your-api.onrender.com/api/health`. It should return a connected database status.
+```env
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster-name.mongodb.net/ccmms?retryWrites=true&w=majority
+```
 
-## Android
+The server automatically creates indexes and seeds categories/buildings plus demo accounts when the DB is empty.
 
-The source is updated, but Capacitor's bundled web assets must be regenerated:
+## 4. Firebase — Forgot Password only
+
+Firebase is not the main database and is not used for normal application data. It is only the password-reset bridge.
+
+1. Firebase Console → create/select project.
+2. Authentication → Sign-in method → enable **Email/Password**.
+3. Project Settings → General → copy **Web API Key**.
+4. Put it in `.env`:
+
+```env
+FIREBASE_API_KEY=your_firebase_web_api_key
+```
+
+5. Authentication → Settings → Authorized domains:
+   - add `localhost` for local testing
+   - after Render deploy, add your `your-app.onrender.com` domain
+6. Set:
+
+```env
+APP_BASE_URL=http://localhost:3000
+```
+
+On Render change it to your public URL.
+
+### How reset works
+
+- User presses Forgot Password.
+- Backend confirms the email belongs to a MongoDB account without exposing account existence.
+- Backend uses Firebase REST only to send the password reset email.
+- User sets a new password through Firebase's secure reset page.
+- On the first login with that new password, the CCMMS backend verifies it with Firebase and securely re-hashes/syncs the new password into MongoDB.
+- Normal logins after that are MongoDB + bcrypt + JWT.
+
+## 5. Local run
+
+Build all portals:
 
 ```bash
 npm run build
-npx cap sync android
 ```
 
-Then open `android/` in Android Studio and build the APK or App Bundle.
+Start API + all portals:
+
+```bash
+npm start
+```
+
+Open:
+
+- http://localhost:3000/student/
+- http://localhost:3000/admin/
+- http://localhost:3000/staff/
+- http://localhost:3000/api/health
+
+On Windows you can use `RUN-WINDOWS.bat` after creating `.env`.
+
+## 6. Demo accounts
+
+Seeded when `SEED_DEMO_USERS=true`:
+
+- Student: `student@campusfix.local` / `Student@123`
+- Admin: `admin@campusfix.local` / `Admin@123`
+- Staff: `staff@campusfix.local` / `Staff@123`
+
+These `.local` addresses are only demo logins and cannot receive real Firebase reset emails. Register/use a real email to test Forgot Password.
+
+## 7. Render deployment
+
+A `render.yaml` is included.
+
+### GitHub + Render
+
+1. Push this folder to GitHub.
+2. Render → New → Blueprint.
+3. Select the repository; Render reads `render.yaml`.
+4. Add these secret/environment values in Render:
+   - `MONGODB_URI`
+   - `FIREBASE_API_KEY`
+   - `APP_BASE_URL` = your Render URL, e.g. `https://ccmms-fullstack.onrender.com`
+   - `CORS_ORIGINS` can be blank if all portals use the same Render domain
+5. `JWT_SECRET` is generated by Render from the YAML.
+6. Deploy.
+7. Add the Render hostname to Firebase Authorized Domains.
+
+Render runs:
+
+```text
+Build: npm install --no-audit --no-fund && npm run build
+Start: npm start
+Health: /api/health
+```
+
+## 8. Frontend API configuration
+
+For production, Student/Admin/Staff are served by the same Express server, so no frontend API env is needed.
+
+For Vite hot reload, each portal can use:
+
+```env
+VITE_API_URL=http://localhost:3000
+```
+
+The frontend automatically falls back to `http://localhost:3000/api` on common Vite development ports.
+
+## 9. Media and complaint rules
+
+- Complaint **Photo \*** is mandatory.
+- Video is optional.
+- Backend rejects complaints that do not contain at least one photo, even if frontend validation is bypassed.
+- Media is uploaded through `/api/media` and stored in MongoDB GridFS.
+- Staff Before Photo is mandatory before work starts.
+- Staff After Photo is mandatory before work completion/approval.
+- Student/Admin/Staff complaint details can read the same work-order evidence from MongoDB.
+
+## 10. Security included
+
+- bcrypt password hashing
+- JWT authentication
+- role + ownership checks on data resources
+- Helmet security headers
+- configurable CORS
+- no password hashes returned by API
+- generic Forgot Password response to reduce account enumeration
+- server-side complaint photo validation
+- server-side before/after work evidence validation
+- MongoDB unique/indexed fields
+- environment secrets excluded by `.gitignore`
+
+See `docs/API.md` and `docs/RENDER-FIREBASE-MONGODB.md` for more detail.

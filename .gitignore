@@ -1,7 +1,10 @@
 node_modules/
-server/node_modules/
 .env
-server/.env
-server/uploads/*
-!server/uploads/.gitkeep
-dist/
+.env.*
+!.env.example
+student/dist/
+admin/dist/
+staff/dist/
+*.log
+.DS_Store
+.vscode/
