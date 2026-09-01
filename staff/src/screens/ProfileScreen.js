@@ -270,30 +270,36 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
 
           <button type="button" onClick={signOut} className="staff-signout"><LogOut size={18}/> Sign out</button>
 
-          {editing && <div className="student-modal-layer" onClick={() => setEditing(false)}>
-            <form className="student-modal-card" onSubmit={handleSave} onClick={(event) => event.stopPropagation()}>
-              <div className="student-modal-title"><h3>Edit Profile</h3><button type="button" onClick={() => setEditing(false)}><X size={20}/></button></div>
-              {saveError && <div className="student-inline-error">{saveError}</div>}
-              {saveSuccess && <div className="student-success-banner">Profile updated.</div>}
-              <label>Full name<input value={form.full_name} onChange={(event) => setForm({...form, full_name: event.target.value})}/></label>
-              <label>Employee ID<input value={form.college_id} onChange={(event) => setForm({...form, college_id: event.target.value})}/></label>
-              <label>Department<input value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}/></label>
-              <label>Phone<input value={form.phone} onChange={(event) => setForm({...form, phone: event.target.value})}/></label>
-              <button className="student-submit-button" type="submit" disabled={saving}><Save size={18}/>{saving ? 'Saving…' : 'Save Changes'}</button>
-            </form>
+          {editing && <div className="admin-dark-modal-layer" onClick={() => setEditing(false)}>
+            <div className="admin-dark-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="admin-dark-modal-header"><h3>Edit Profile</h3><button type="button" onClick={() => setEditing(false)}><X size={20}/></button></div>
+              <form onSubmit={handleSave} className="admin-dark-form">
+                {saveError && <div className="admin-dark-error">{saveError}</div>}
+                {saveSuccess && <div className="admin-dark-success-inline">Profile updated successfully.</div>}
+                <AdminDarkField label="Full Name"><input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required/></AdminDarkField>
+                <AdminDarkField label="Email"><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })}/></AdminDarkField>
+                <div className="admin-dark-form-row">
+                  <AdminDarkField label="Employee ID"><input value={form.college_id} onChange={(event) => setForm({ ...form, college_id: event.target.value })}/></AdminDarkField>
+                  <AdminDarkField label="Department"><input value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })}/></AdminDarkField>
+                </div>
+                <AdminDarkField label="Phone"><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })}/></AdminDarkField>
+                <button className="admin-dark-primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+              </form>
+            </div>
           </div>}
 
-          {pwOpen && <div className="student-modal-layer" onClick={() => setPwOpen(false)}>
-            <form className="student-modal-card" onSubmit={handleChangePassword} onClick={(event) => event.stopPropagation()}>
-              <div className="student-modal-title"><h3>Change Password</h3><button type="button" onClick={() => setPwOpen(false)}><X size={20}/></button></div>
-              {pwError && <div className="student-inline-error">{pwError}</div>}
-              {pwSuccess && <div className="student-success-banner">Password changed.</div>}
-              <label>Current password<input type={showPw ? 'text' : 'password'} value={pwForm.current} onChange={(event) => setPwForm({...pwForm, current: event.target.value})}/></label>
-              <label>New password<input type={showPw ? 'text' : 'password'} value={pwForm.new} onChange={(event) => setPwForm({...pwForm, new: event.target.value})}/></label>
-              <label>Confirm password<input type={showPw ? 'text' : 'password'} value={pwForm.confirm} onChange={(event) => setPwForm({...pwForm, confirm: event.target.value})}/></label>
-              <button type="button" className="student-show-password" onClick={() => setShowPw((value) => !value)}>{showPw ? <EyeOff size={16}/> : <Eye size={16}/>} {showPw ? 'Hide passwords' : 'Show passwords'}</button>
-              <button className="student-submit-button" type="submit" disabled={pwSaving}><Lock size={18}/>{pwSaving ? 'Updating…' : 'Update Password'}</button>
-            </form>
+          {pwOpen && <div className="admin-dark-modal-layer" onClick={() => setPwOpen(false)}>
+            <div className="admin-dark-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="admin-dark-modal-header"><h3>Change Password</h3><button type="button" onClick={() => setPwOpen(false)}><X size={20}/></button></div>
+              {pwSuccess ? (<div className="admin-dark-success"><CheckCircle2 size={35}/><strong>Password updated</strong><span>Your password was changed successfully.</span></div>) : (<form onSubmit={handleChangePassword} className="admin-dark-form">
+                {pwError && <div className="admin-dark-error">{pwError}</div>}
+                <AdminDarkField label="Current Password"><input type={showPw ? 'text' : 'password'} value={pwForm.current} onChange={(event) => setPwForm({ ...pwForm, current: event.target.value })} required/></AdminDarkField>
+                <AdminDarkField label="New Password"><input type={showPw ? 'text' : 'password'} value={pwForm.new} onChange={(event) => setPwForm({ ...pwForm, new: event.target.value })} required minLength={8}/></AdminDarkField>
+                <AdminDarkField label="Confirm Password"><input type={showPw ? 'text' : 'password'} value={pwForm.confirm} onChange={(event) => setPwForm({ ...pwForm, confirm: event.target.value })} required/></AdminDarkField>
+                <button type="button" className="admin-dark-ghost-btn" onClick={() => setShowPw((value) => !value)}>{showPw ? <EyeOff size={16}/> : <Eye size={16}/>} {showPw ? 'Hide passwords' : 'Show passwords'}</button>
+                <button className="admin-dark-primary" type="submit" disabled={pwSaving}>{pwSaving ? 'Updating…' : 'Update Password'}</button>
+              </form>)}
+            </div>
           </div>}
         </div>);
     }

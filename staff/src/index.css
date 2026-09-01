@@ -1558,6 +1558,41 @@ html.dark select {
   text-align: center;
 }
 
+.admin-dark-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-dark-ghost-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 1px solid #2d455a;
+  border-radius: 12px;
+  color: #9eb0c0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-dark-ghost-btn:hover {
+  color: var(--admin-cyan);
+  border-color: var(--admin-cyan);
+}
+
+.admin-dark-hint {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #5a4a24;
+  color: #f0c674;
+  background: #2c2412;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .admin-dark-success span {
   color: #a8b5c1;
   font-size: 13px;
@@ -5879,6 +5914,7 @@ html.dark select {
 /* Staff mobile experience — dark navy 3-tab Home / My Job / My Profile UI   */
 /* ========================================================================== */
 .staff-ui {
+  --admin-cyan: #21d4ee;
   color-scheme: dark;
   min-height: 100dvh;
   padding: 18px 12px;
