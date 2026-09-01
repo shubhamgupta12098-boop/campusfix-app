@@ -205,7 +205,6 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
         />);
     }
     if (role === 'staff') {
-        const completionRate = total ? Math.round((resolved / total) * 100) : 0;
         const openEditor = () => {
             setSaveError(null);
             setForm({
@@ -243,11 +242,11 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
               <ChevronRight size={17}/>
             </button>
 
-            <div className="staff-profile-row staff-profile-progress-row">
-              <span className="staff-profile-row-icon"><CheckCircle2 size={20}/></span>
-              <span><small>Task Completion</small><strong>{resolved} / {total || 0} jobs completed</strong><i><b style={{ width: `${completionRate}%` }}/></i></span>
-              <em>{completionRate}%</em>
-            </div>
+            <button type="button" onClick={openEditor} className="staff-profile-row">
+              <span className="staff-profile-row-icon"><Edit3 size={20}/></span>
+              <span><small>Edit Profile</small><strong>Update your personal details</strong></span>
+              <ChevronRight size={17}/>
+            </button>
 
             <button type="button" onClick={() => onNavigate?.('performance')} className="staff-profile-row staff-profile-performance-link">
               <span className="staff-profile-row-icon"><TrendingUp size={21}/></span>
