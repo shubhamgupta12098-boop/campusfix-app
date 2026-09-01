@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+student/dist/
+admin/dist/
+staff/dist/
+*.log
+.DS_Store
+.vscode/
+atlas-credentials*.env
+*.pem
+serviceAccount*.json

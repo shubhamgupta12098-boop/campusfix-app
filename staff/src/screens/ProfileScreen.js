@@ -205,6 +205,7 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
         />);
     }
     if (role === 'staff') {
+        const completionRate = total ? Math.round((resolved / total) * 100) : 0;
         const openEditor = () => {
             setSaveError(null);
             setForm({
@@ -242,11 +243,11 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
               <ChevronRight size={17}/>
             </button>
 
-            <button type="button" onClick={openEditor} className="staff-profile-row">
-              <span className="staff-profile-row-icon"><Edit3 size={20}/></span>
-              <span><small>Edit Profile</small><strong>Update your personal details</strong></span>
-              <ChevronRight size={17}/>
-            </button>
+            <div className="staff-profile-row staff-profile-progress-row">
+              <span className="staff-profile-row-icon"><CheckCircle2 size={20}/></span>
+              <span><small>Task Completion</small><strong>{resolved} / {total || 0} jobs completed</strong><i><b style={{ width: `${completionRate}%` }}/></i></span>
+              <em>{completionRate}%</em>
+            </div>
 
             <button type="button" onClick={() => onNavigate?.('performance')} className="staff-profile-row staff-profile-performance-link">
               <span className="staff-profile-row-icon"><TrendingUp size={21}/></span>
@@ -269,35 +270,29 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
 
           <button type="button" onClick={signOut} className="staff-signout"><LogOut size={18}/> Sign out</button>
 
-          {editing && <div className="staff-modal-layer" onClick={() => setEditing(false)}>
-            <form className="staff-modal-card" onSubmit={handleSave} onClick={(event) => event.stopPropagation()}>
-              <div className="staff-modal-header"><h3>Edit Profile</h3><button type="button" onClick={() => setEditing(false)} aria-label="Close"><X size={20}/></button></div>
-              {saveError && <div className="staff-modal-error">{saveError}</div>}
-              {saveSuccess && <div className="staff-modal-success">Profile updated successfully.</div>}
-              <label className="staff-field"><span><User size={13}/> Full Name</span><input value={form.full_name} onChange={(event) => setForm({...form, full_name: event.target.value})} required/></label>
-              <label className="staff-field"><span><BadgeCheck size={13}/> Employee ID</span><input value={form.college_id} onChange={(event) => setForm({...form, college_id: event.target.value})}/></label>
-              <label className="staff-field"><span><Building2 size={13}/> Department</span><input value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}/></label>
-              <label className="staff-field"><span><Phone size={13}/> Phone</span><input value={form.phone} onChange={(event) => setForm({...form, phone: event.target.value})}/></label>
-              <div className="staff-modal-actions">
-                <button className="staff-modal-save" type="submit" disabled={saving}><Save size={16}/>{saving ? 'Saving…' : 'Save Changes'}</button>
-                <button className="staff-modal-cancel" type="button" onClick={() => setEditing(false)}>Cancel</button>
-              </div>
+          {editing && <div className="student-modal-layer" onClick={() => setEditing(false)}>
+            <form className="student-modal-card" onSubmit={handleSave} onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-title"><h3>Edit Profile</h3><button type="button" onClick={() => setEditing(false)}><X size={20}/></button></div>
+              {saveError && <div className="student-inline-error">{saveError}</div>}
+              {saveSuccess && <div className="student-success-banner">Profile updated.</div>}
+              <label>Full name<input value={form.full_name} onChange={(event) => setForm({...form, full_name: event.target.value})}/></label>
+              <label>Employee ID<input value={form.college_id} onChange={(event) => setForm({...form, college_id: event.target.value})}/></label>
+              <label>Department<input value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}/></label>
+              <label>Phone<input value={form.phone} onChange={(event) => setForm({...form, phone: event.target.value})}/></label>
+              <button className="student-submit-button" type="submit" disabled={saving}><Save size={18}/>{saving ? 'Saving…' : 'Save Changes'}</button>
             </form>
           </div>}
 
-          {pwOpen && <div className="staff-modal-layer" onClick={() => setPwOpen(false)}>
-            <form className="staff-modal-card" onSubmit={handleChangePassword} onClick={(event) => event.stopPropagation()}>
-              <div className="staff-modal-header"><h3>Change Password</h3><button type="button" onClick={() => setPwOpen(false)} aria-label="Close"><X size={20}/></button></div>
-              {pwError && <div className="staff-modal-error">{pwError}</div>}
-              {pwSuccess && <div className="staff-modal-success">Password changed successfully.</div>}
-              <label className="staff-field"><span><KeyRound size={13}/> Current Password</span><input type={showPw ? 'text' : 'password'} value={pwForm.current} onChange={(event) => setPwForm({...pwForm, current: event.target.value})}/></label>
-              <label className="staff-field"><span><Lock size={13}/> New Password</span><input type={showPw ? 'text' : 'password'} value={pwForm.new} onChange={(event) => setPwForm({...pwForm, new: event.target.value})}/></label>
-              <label className="staff-field"><span><Lock size={13}/> Confirm Password</span><input type={showPw ? 'text' : 'password'} value={pwForm.confirm} onChange={(event) => setPwForm({...pwForm, confirm: event.target.value})}/></label>
-              <button type="button" className="staff-modal-toggle" onClick={() => setShowPw((value) => !value)}>{showPw ? <EyeOff size={14}/> : <Eye size={14}/>} {showPw ? 'Hide passwords' : 'Show passwords'}</button>
-              <div className="staff-modal-actions">
-                <button className="staff-modal-save" type="submit" disabled={pwSaving}><Lock size={16}/>{pwSaving ? 'Updating…' : 'Update Password'}</button>
-                <button className="staff-modal-cancel" type="button" onClick={() => setPwOpen(false)}>Cancel</button>
-              </div>
+          {pwOpen && <div className="student-modal-layer" onClick={() => setPwOpen(false)}>
+            <form className="student-modal-card" onSubmit={handleChangePassword} onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-title"><h3>Change Password</h3><button type="button" onClick={() => setPwOpen(false)}><X size={20}/></button></div>
+              {pwError && <div className="student-inline-error">{pwError}</div>}
+              {pwSuccess && <div className="student-success-banner">Password changed.</div>}
+              <label>Current password<input type={showPw ? 'text' : 'password'} value={pwForm.current} onChange={(event) => setPwForm({...pwForm, current: event.target.value})}/></label>
+              <label>New password<input type={showPw ? 'text' : 'password'} value={pwForm.new} onChange={(event) => setPwForm({...pwForm, new: event.target.value})}/></label>
+              <label>Confirm password<input type={showPw ? 'text' : 'password'} value={pwForm.confirm} onChange={(event) => setPwForm({...pwForm, confirm: event.target.value})}/></label>
+              <button type="button" className="student-show-password" onClick={() => setShowPw((value) => !value)}>{showPw ? <EyeOff size={16}/> : <Eye size={16}/>} {showPw ? 'Hide passwords' : 'Show passwords'}</button>
+              <button className="student-submit-button" type="submit" disabled={pwSaving}><Lock size={18}/>{pwSaving ? 'Updating…' : 'Update Password'}</button>
             </form>
           </div>}
         </div>);

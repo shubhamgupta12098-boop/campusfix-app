@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner } from '@/components/ui';
-import { PRIORITY_CONFIG, formatDate, onImageError, staffStatusLabel } from '@/lib/constants';
+import { PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
 import {
     ArrowLeft,
     Bell,
@@ -370,7 +370,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
         {!list.length ? <div className="staff-empty"><Wrench size={28}/><strong>No jobs here</strong><span>Assigned maintenance jobs will appear here.</span></div> : list.map((complaint) => {
             const Icon = iconForComplaint(complaint);
             const priority = PRIORITY_CONFIG[complaint.priority] || PRIORITY_CONFIG.medium;
-            const status = staffStatusLabel(complaint.status);
+            const status = statusFor(complaint.status);
             const location = [complaint.buildings?.name, complaint.location_description].filter(Boolean).join(', ') || 'Campus';
             return (<article key={complaint.id} className="staff-work-card">
               <button type="button" className="staff-work-card-main" onClick={() => onOpenComplaint(complaint.id)}>
@@ -524,3 +524,10 @@ function iconForComplaint(complaint) {
     return Wrench;
 }
 
+function statusFor(status) {
+    if (status === 'assigned') return { label: 'Pending', tone: 'assigned' };
+    if (status === 'in_progress') return { label: 'In Progress', tone: 'progress' };
+    if (status === 'waiting_approval') return { label: 'Under Review', tone: 'review' };
+    if (['resolved', 'closed'].includes(status)) return { label: 'Closed', tone: 'closed' };
+    return { label: 'Open', tone: 'open' };
+}
