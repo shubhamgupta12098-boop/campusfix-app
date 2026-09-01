@@ -3,7 +3,6 @@ import { useAuthStore } from '@/lib/auth';
 import {
     BarChart3,
     Bell,
-    ChevronLeft,
     ChevronRight,
     ClipboardList,
     Home,
@@ -12,6 +11,7 @@ import {
     Plus,
     Search,
     Settings,
+    SquarePen,
     ShieldCheck,
     Star,
     UserCircle,
@@ -24,18 +24,10 @@ import { RaiseComplaintScreen } from '@/screens/RaiseComplaintScreen';
 import { MyComplaintsScreen } from '@/screens/MyComplaintsScreen';
 import { ComplaintDetailScreen } from '@/screens/ComplaintDetailScreen';
 import { NotificationsScreen } from '@/screens/NotificationsScreen';
-import { ReportsScreen } from '@/screens/ReportsScreen';
-import { UserManagementScreen } from '@/screens/UserManagementScreen';
-import { TechnicianJobsScreen } from '@/screens/TechnicianJobsScreen';
-import { AssignComplaintsScreen } from '@/screens/AssignComplaintsScreen';
-import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
-import { PerformanceScreen } from '@/screens/PerformanceScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
-import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { supabase } from '@/lib/supabase';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { subscribeNotificationChanges } from '@/lib/notificationBus';
 
 const NAV_ITEMS = [
     { id: 'dashboard', label: 'Home', description: 'Overview and recent activity', icon: Home, roles: ['student', 'staff', 'admin'] },
@@ -59,12 +51,12 @@ const BOTTOM_NAV = {
         // top bell/drawer so the bottom bar matches the student flow.
         left: [
             { id: 'dashboard', label: 'Home', icon: Home },
-            { id: 'raise', label: 'Submit', icon: ClipboardList },
+            { id: 'raise', label: 'Submit', icon: SquarePen },
         ],
-        action: { id: 'raise', label: 'New', icon: Plus },
+        action: { id: 'raise', label: 'Submit complaint', icon: Plus },
         right: [
-            { id: 'my-complaints', label: 'Track', icon: ClipboardList },
-            { id: 'profile', label: 'Profile', icon: UserCircle },
+            { id: 'my-complaints', label: 'Track', icon: BarChart3 },
+            { id: 'profile', label: 'My Profile', icon: UserCircle },
         ],
     },
     staff: {
@@ -100,15 +92,15 @@ const ROLE_LABELS = {
 };
 
 const ADMIN_SCREEN_TITLES = {
-    dashboard: 'Campus Maintenance',
+    dashboard: 'Dashboard',
     approvals: 'Work Approvals',
     'work-orders': 'Work Orders',
-    assign: 'Assign Complaints',
+    assign: 'Assign',
     reports: 'Reports',
     users: 'User Management',
-    feedback: 'Feedback & Ratings',
+    feedback: 'Feedback',
     notifications: 'Notifications',
-    profile: 'My Profile',
+    profile: 'Profile',
     'complaint-detail': 'Complaint Details',
 };
 
@@ -127,7 +119,6 @@ export const AppShell = () => {
     const { profile, signOut } = useAuthStore();
     const [screen, setScreen] = useState('dashboard');
     const [selectedComplaintId, setSelectedComplaintId] = useState(null);
-    const [complaintReturnScreen, setComplaintReturnScreen] = useState(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
     const [pendingApprovals, setPendingApprovals] = useState(0);
@@ -139,49 +130,52 @@ export const AppShell = () => {
     useEffect(() => {
         let refreshTimer = null;
         const refreshFromSharedData = () => {
-            if (refreshTimer) window.clearTimeout(refreshTimer);
+            if (refreshTimer)
+                window.clearTimeout(refreshTimer);
             refreshTimer = window.setTimeout(() => setSharedDataVersion((value) => value + 1), 120);
         };
         const onStorage = (event) => {
-            if (event.key === 'campusfix_shared_data_signal') refreshFromSharedData();
+            if (event.key === 'campusfix_shared_data_signal')
+                refreshFromSharedData();
         };
         let channel = null;
         try {
             channel = new BroadcastChannel('campusfix_shared_data_channel');
             channel.addEventListener('message', refreshFromSharedData);
-        } catch {}
+        }
+        catch {}
         window.addEventListener('storage', onStorage);
         return () => {
-            if (refreshTimer) window.clearTimeout(refreshTimer);
+            if (refreshTimer)
+                window.clearTimeout(refreshTimer);
             window.removeEventListener('storage', onStorage);
             try { channel?.close(); } catch {}
         };
     }, []);
 
     useEffect(() => {
-        if (!profile?.id) return;
+        if (!profile?.id)
+            return;
         let active = true;
         const loadUnread = async () => {
-            let query = supabase.from('notifications').select('*').eq('user_id', profile.id);
-            if (role === 'student') query = query.eq('type', 'work_completed');
+            let query = supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+            // Students only receive a single actionable alert when completed
+            // work is approved. Staff/admin keep their operational alerts.
+            if (role === 'student')
+                query = query.eq('type', 'work_completed');
             const result = await query;
-            if (active) {
-                const rows = Array.isArray(result.data) ? result.data : [];
-                // Older local notifications may not have is_read yet; anything
-                // other than explicit true is still treated as unread.
-                setUnreadNotifications(rows.filter((item) => item?.is_read !== true).length);
-            }
+            if (active)
+                setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
             if (role === 'admin') {
                 const approvals = await supabase.from('work_orders').select('*').eq('approval_status', 'pending');
-                if (active) setPendingApprovals(Array.isArray(approvals.data) ? approvals.data.length : 0);
+                if (active)
+                    setPendingApprovals(Array.isArray(approvals.data) ? approvals.data.length : 0);
             }
         };
         void loadUnread();
-        const unsubscribe = subscribeNotificationChanges(() => { void loadUnread(); });
-        const timer = window.setInterval(loadUnread, 5000);
+        const timer = window.setInterval(loadUnread, 15000);
         return () => {
             active = false;
-            unsubscribe();
             window.clearInterval(timer);
         };
     }, [profile?.id, role, screen, sharedDataVersion]);
@@ -192,9 +186,8 @@ export const AppShell = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const openComplaint = (id, returnScreen = screen) => {
+    const openComplaint = (id) => {
         setSelectedComplaintId(id);
-        setComplaintReturnScreen(returnScreen);
         setScreen('complaint-detail');
         setDrawerOpen(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -202,8 +195,6 @@ export const AppShell = () => {
 
     const activeScreen = screen === 'complaint-detail'
         ? role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign'
-        : role === 'admin' && ['users', 'notifications'].includes(screen) ? 'assign'
-        : role === 'admin' && screen === 'feedback' ? 'reports'
         : screen;
 
     const initials = (profile?.full_name || 'CampusFix User')
@@ -233,13 +224,9 @@ export const AppShell = () => {
 
     const actionActive = activeScreen === bottomNav.action.id;
     const ActionIcon = bottomNav.action.icon;
-    const adminPageTitle = ADMIN_SCREEN_TITLES[screen] || 'Campus Maintenance';
-    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'complaint-detail']);
-    const showAdminBack = role === 'admin' && adminBackScreens.has(screen);
-    const defaultComplaintReturn = role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign';
-    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : 'dashboard';
+    const adminPageTitle = ADMIN_SCREEN_TITLES[screen] || 'Dashboard';
 
-    return (<div className={'campus-app-shell ' + (role === 'staff' ? 'staff-ui ' : '') + (role === 'admin' ? `admin-ui admin-screen-${screen} ` : '') + (role === 'admin' && screen === 'profile' ? 'admin-profile-mode ' : '') + (role === 'admin' && showAdminBack ? 'admin-has-back ' : '')}>
+    return (<div className={'campus-app-shell ' + (role === 'student' ? 'student-ui ' : '') + (role === 'admin' ? 'admin-ui ' : '') + (role === 'admin' && screen === 'profile' ? 'admin-profile-mode' : '')}>
       <div className="campus-app-frame">
         {role === 'admin' && (
           <aside className="admin-desktop-sidebar" aria-label="Admin navigation">
@@ -267,18 +254,12 @@ export const AppShell = () => {
           </aside>
         )}
 
-        <header className={`campus-topbar ${role === 'staff' ? 'student-hidden-topbar' : ''}`}>
+        <header className={`campus-topbar ${role === 'student' ? 'student-hidden-topbar' : ''}`}>
           {role === 'admin' ? (
             <>
-              {showAdminBack ? (
-                <button type="button" onClick={() => navigate(adminBackTarget)} className="campus-icon-button admin-mobile-menu admin-back-button" aria-label="Go back">
-                  <ChevronLeft size={30}/>
-                </button>
-              ) : (
-                <button type="button" onClick={() => setDrawerOpen(true)} className="campus-icon-button admin-mobile-menu admin-menu-button" aria-label="Open app menu">
-                  <Menu size={22}/>
-                </button>
-              )}
+              <button type="button" onClick={() => setDrawerOpen(true)} className="campus-icon-button admin-mobile-menu" aria-label="Open app menu">
+                <Menu size={22}/>
+              </button>
               <div className="admin-topbar-copy">
                 <p>ADMIN CONSOLE</p>
                 <h1>{adminPageTitle}</h1>
@@ -288,21 +269,11 @@ export const AppShell = () => {
                   <Search size={17}/>
                   <input type="search" placeholder="Search..." aria-label="Search"/>
                 </label>
-                {screen === 'notifications' ? (
-                  <button
-                    type="button"
-                    className="admin-clear-all-header"
-                    onClick={() => window.dispatchEvent(new CustomEvent('campusfix:clear-notifications'))}
-                  >
-                    Clear all
-                  </button>
-                ) : (
-                  <button type="button" onClick={() => navigate('notifications')} className="campus-icon-button campus-alert-button" aria-label="Open notifications">
-                    <Bell size={25}/>
-                    {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
-                  </button>
-                )}
-                {screen !== 'notifications' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
+                <button type="button" onClick={() => navigate('notifications')} className="campus-icon-button campus-alert-button" aria-label="Open notifications">
+                  <Bell size={21}/>
+                  {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+                </button>
+                <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>
               </div>
             </>
           ) : (
@@ -331,55 +302,31 @@ export const AppShell = () => {
         </header>
 
         <main className="campus-page-content" data-screen={screen}>
-          <ErrorBoundary resetKey={screen}>
-            {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} unreadNotifications={unreadNotifications}/>}
-            {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')}/>}
-            {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'complaint-detail' && selectedComplaintId && (<ComplaintDetailScreen complaintId={selectedComplaintId} unreadNotifications={unreadNotifications} onNavigate={navigate} onBack={() => navigate(complaintReturnScreen || defaultComplaintReturn)}/>)}
+          <ErrorBoundary key={`${screen}-${sharedDataVersion}`} resetKey={`${screen}-${sharedDataVersion}`}>
+            {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint}/>}
+            {screen === 'raise' && <RaiseComplaintScreen onDone={() => navigate('my-complaints')} onBack={() => navigate('dashboard')}/>}
+            {screen === 'my-complaints' && <MyComplaintsScreen onOpenComplaint={openComplaint} onNavigate={navigate}/>}
+            {screen === 'complaint-detail' && selectedComplaintId && (<ComplaintDetailScreen complaintId={selectedComplaintId} unreadNotifications={unreadNotifications} onNavigate={navigate} onBack={() => navigate(role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign')}/>)}
             {screen === 'notifications' && <NotificationsScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'reports' && <ReportsScreen onNavigate={navigate}/>}
-            {screen === 'users' && <UserManagementScreen/>}
-            {screen === 'technician-jobs' && <TechnicianJobsScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'assign' && <AssignComplaintsScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'work-orders' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint}/>}
-            {screen === 'profile' && <ProfileScreen onNavigate={navigate} unreadNotifications={unreadNotifications}/>}
-            {screen === 'performance' && <PerformanceScreen onNavigate={navigate} unreadNotifications={unreadNotifications}/>}
-            {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}
+            {screen === 'profile' && <ProfileScreen onNavigate={navigate}/>}
+            {screen === 'feedback' && <FeedbackScreen onOpenComplaint={openComplaint} onBack={() => navigate('dashboard')}/>}
           </ErrorBoundary>
         </main>
 
-        {role === 'staff' ? (
-          <nav className="campus-bottom-nav staff-bottom-nav" aria-label="Staff navigation">
-            {[
-              { id: 'dashboard', label: 'Home', icon: Home },
-              { id: 'technician-jobs', label: 'My Job', icon: Wrench },
-              { id: 'notifications', label: 'Alerts', icon: Bell },
-              { id: 'profile', label: 'My Profile', icon: UserCircle },
-            ].map(renderNavButton)}
-          </nav>
-        ) : (
-          <nav className="campus-bottom-nav" aria-label="Primary navigation">
-            {role === 'admin' ? (
-              [...bottomNav.left, bottomNav.action, ...bottomNav.right].map(renderNavButton)
-            ) : (
-              <>
-                {bottomNav.left.map(renderNavButton)}
-                <button
-                  type="button"
-                  onClick={() => navigate(bottomNav.action.id)}
-                  className={'campus-quick-action ' + (actionActive ? 'is-active' : '')}
-                  aria-label={bottomNav.action.label}
-                  aria-current={actionActive ? 'page' : undefined}
-                >
-                  <ActionIcon size={31}/>
-                  <span>{bottomNav.action.label}</span>
-                </button>
-                {bottomNav.right.map(renderNavButton)}
-              </>
-            )}
-          </nav>
-        )}
+        <nav className="campus-bottom-nav" aria-label="Primary navigation">
+          {bottomNav.left.map(renderNavButton)}
+          <button
+            type="button"
+            onClick={() => navigate(bottomNav.action.id)}
+            className={'campus-quick-action ' + (actionActive ? 'is-active' : '')}
+            aria-label={bottomNav.action.label}
+            aria-current={actionActive ? 'page' : undefined}
+          >
+            <ActionIcon size={role === 'student' ? 31 : 27}/>
+            <span>{bottomNav.action.label}</span>
+          </button>
+          {bottomNav.right.map(renderNavButton)}
+        </nav>
       </div>
 
       <div className={'campus-drawer-layer ' + (drawerOpen ? 'is-open' : '')} aria-hidden={!drawerOpen}>

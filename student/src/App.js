@@ -3,7 +3,7 @@ import { useAuthStore } from '@/lib/auth';
 import { AppShell } from '@/components/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-const EXPECTED_ROLE = 'staff';
+const EXPECTED_ROLE = 'student';
 
 function Redirecting() {
   return (

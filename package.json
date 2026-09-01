@@ -1,0 +1,37 @@
+{
+  "name": "ccmms-fullstack-mobile",
+  "private": true,
+  "version": "3.1.0",
+  "description": "CCMMS unified login with role-based Student, Admin and Staff mobile portals, Express API, MongoDB and Firebase password reset.",
+  "engines": {
+    "node": ">=20 <25"
+  },
+  "workspaces": [
+    "student",
+    "admin",
+    "staff"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=student && npm run build --workspace=admin && npm run build --workspace=staff",
+    "start": "node server.mjs",
+    "dev:server": "node --watch server.mjs",
+    "dev:student": "npm run dev --workspace=student",
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:staff": "npm run dev --workspace=staff",
+    "check": "node --check server.mjs && node --check backend/db.mjs && node --check backend/auth.mjs && node --check backend/data.mjs && node --check backend/firebase.mjs && node --check backend/media.mjs",
+    "render-build": "npm run build",
+    "verify": "npm run check && npm run build",
+    "mongo:test": "node scripts/test-mongo.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

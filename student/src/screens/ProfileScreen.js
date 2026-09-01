@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, timeAgo } from '@/lib/constants';
-import { User, Mail, Phone, Building2, Home, DoorOpen, BadgeCheck, Shield, ShieldCheck, Edit3, X, Save, ClipboardList, CheckCircle2, Clock, Star, Wrench, TrendingUp, Calendar, Award, Activity, KeyRound, Lock, Eye, EyeOff, Moon, Sun, ArrowLeft, ChevronRight, Bell, HelpCircle, LogOut, MessageCircle, Settings } from 'lucide-react';
+import { User, Mail, Phone, Building2, Home, DoorOpen, BadgeCheck, Shield, ShieldCheck, Edit3, X, Save, ClipboardList, CheckCircle2, Clock, Star, Wrench, TrendingUp, Calendar, Award, Activity, KeyRound, Lock, Eye, EyeOff, Moon, Sun, ArrowLeft, ChevronRight, Bell, HelpCircle, LogOut, MessageCircle } from 'lucide-react';
 const ROLE_LABELS = {
     student: 'Student',
     staff: 'Staff',
@@ -14,7 +14,7 @@ const ROLE_COLORS = {
     staff: { bg: 'bg-cyan-50', text: 'text-cyan-700', gradient: 'from-cyan-500 to-cyan-600' },
     admin: { bg: 'bg-rose-50', text: 'text-rose-700', gradient: 'from-rose-500 to-rose-600' },
 };
-export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
+export function ProfileScreen({ onNavigate }) {
     const { profile, user, refreshProfile, signOut, changePassword, changeEmail } = useAuthStore();
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -52,10 +52,8 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
             .from('complaints')
             .select('*, complaint_categories(*)')
             .order('created_at', { ascending: false });
-        if (profile?.role === 'student')
+        if (profile?.role !== 'admin')
             query = query.eq('user_id', profile?.id);
-        else if (profile?.role === 'staff')
-            query = query.eq('assigned_to', profile?.id);
         const { data } = await query;
         setComplaints((data || []));
         setLoading(false);
@@ -204,8 +202,7 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
           handleChangePassword={handleChangePassword}
         />);
     }
-    if (role === 'staff') {
-        const completionRate = total ? Math.round((resolved / total) * 100) : 0;
+    if (role === 'student') {
         const openEditor = () => {
             setSaveError(null);
             setForm({
@@ -221,54 +218,38 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
             });
             setEditing(true);
         };
-        return (<div className="staff-screen staff-profile-screen">
-          <div className="staff-page-titlebar">
-            <button type="button" className="staff-plain-icon" onClick={() => onNavigate?.('dashboard')} aria-label="Back"><ArrowLeft size={23}/></button>
+        return (<div className="student-screen student-profile-screen">
+          <div className="student-profile-heading">
             <h1>My Profile</h1>
-            <button type="button" className="staff-plain-icon staff-bell" onClick={() => onNavigate?.('notifications')} aria-label="Notifications"><Bell size={22}/>{unreadNotifications > 0 && <span className="staff-alert-count">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}</button>
+            <button type="button" className="student-round-icon" onClick={() => onNavigate?.('notifications')} aria-label="Open notifications"><Bell size={23}/></button>
           </div>
 
-          <section className="staff-profile-hero">
-            <div className="staff-profile-avatar">{initials}</div>
-            <button type="button" className="staff-avatar-edit" onClick={openEditor} aria-label="Edit profile"><Edit3 size={13}/></button>
-            <h2>{profile?.full_name || 'Maintenance Staff'}</h2>
-            <p>{profile?.department || 'Campus Maintenance Staff'}</p>
-            <small>{profile?.college_id ? `Employee ID: ${profile.college_id}` : 'Campus Maintenance Team'}</small>
-          </section>
-
-          <section className="staff-profile-list">
-            <button type="button" onClick={openEditor} className="staff-profile-row">
-              <span className="staff-profile-row-icon"><Building2 size={20}/></span>
-              <span><small>Department</small><strong>{profile?.department || 'Maintenance Services'}</strong></span>
-              <ChevronRight size={17}/>
-            </button>
-
-            <div className="staff-profile-row staff-profile-progress-row">
-              <span className="staff-profile-row-icon"><CheckCircle2 size={20}/></span>
-              <span><small>Task Completion</small><strong>{resolved} / {total || 0} jobs completed</strong><i><b style={{ width: `${completionRate}%` }}/></i></span>
-              <em>{completionRate}%</em>
+          <section className="student-profile-card">
+            <div className="student-profile-avatar">{initials}</div>
+            <h2>{profile?.full_name || 'Student'}</h2>
+            <p>{profile?.college_id || 'Student ID'}{profile?.department ? ` · ${profile.department}` : ''}</p>
+            <div className="student-profile-stats">
+              <span><b>{total}</b><small>Total</small></span>
+              <span><b>{open}</b><small>Open</small></span>
+              <span><b>{resolved}</b><small>Closed</small></span>
+              <span><b>{avgRating || '—'}</b><small>Rating</small></span>
             </div>
-
-            <button type="button" onClick={() => onNavigate?.('performance')} className="staff-profile-row staff-profile-performance-link">
-              <span className="staff-profile-row-icon"><TrendingUp size={21}/></span>
-              <span><small>Performance</small><strong>{avgRating || '—'} / 5</strong><i className="staff-stars">★★★★★</i></span>
-              <ChevronRight size={18}/>
-            </button>
-
-            <button type="button" onClick={openEditor} className="staff-profile-row">
-              <span className="staff-profile-row-icon"><Phone size={20}/></span>
-              <span><small>Contact</small><strong>{profile?.phone || 'Add phone number'}</strong><b className="staff-profile-secondary">{user?.email || profile?.email || '—'}</b></span>
-              <ChevronRight size={17}/>
-            </button>
-
-            <button type="button" onClick={() => setPwOpen(true)} className="staff-profile-row">
-              <span className="staff-profile-row-icon"><KeyRound size={20}/></span>
-              <span><small>App Settings</small><strong>Password & account security</strong></span>
-              <ChevronRight size={17}/>
-            </button>
           </section>
 
-          <button type="button" onClick={signOut} className="staff-signout"><LogOut size={18}/> Sign out</button>
+          <section className="student-profile-details">
+            <h3>Personal Details</h3>
+            <div><Mail size={18}/><span><small>Email</small><b>{user?.email || profile?.email || '—'}</b></span></div>
+            <div><BadgeCheck size={18}/><span><small>College ID</small><b>{profile?.college_id || '—'}</b></span></div>
+            <div><Building2 size={18}/><span><small>Department</small><b>{profile?.department || '—'}</b></span></div>
+            <div><Home size={18}/><span><small>Hostel / Room</small><b>{[profile?.hostel, profile?.block, profile?.room].filter(Boolean).join(' · ') || '—'}</b></span></div>
+            <div><Phone size={18}/><span><small>Phone</small><b>{profile?.phone || '—'}</b></span></div>
+          </section>
+
+          <div className="student-profile-actions">
+            <button type="button" onClick={openEditor}><Edit3 size={18}/>Edit Profile<ChevronRight size={17}/></button>
+            <button type="button" onClick={() => setPwOpen(true)}><KeyRound size={18}/>Change Password<ChevronRight size={17}/></button>
+            <button type="button" onClick={signOut} className="danger"><LogOut size={18}/>Sign out<ChevronRight size={17}/></button>
+          </div>
 
           {editing && <div className="student-modal-layer" onClick={() => setEditing(false)}>
             <form className="student-modal-card" onSubmit={handleSave} onClick={(event) => event.stopPropagation()}>
@@ -276,9 +257,12 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
               {saveError && <div className="student-inline-error">{saveError}</div>}
               {saveSuccess && <div className="student-success-banner">Profile updated.</div>}
               <label>Full name<input value={form.full_name} onChange={(event) => setForm({...form, full_name: event.target.value})}/></label>
-              <label>Employee ID<input value={form.college_id} onChange={(event) => setForm({...form, college_id: event.target.value})}/></label>
+              <label>Email<input value={form.email} onChange={(event) => setForm({...form, email: event.target.value})}/></label>
+              <label>College ID<input value={form.college_id} onChange={(event) => setForm({...form, college_id: event.target.value})}/></label>
               <label>Department<input value={form.department} onChange={(event) => setForm({...form, department: event.target.value})}/></label>
-              <label>Phone<input value={form.phone} onChange={(event) => setForm({...form, phone: event.target.value})}/></label>
+              <div className="student-modal-grid"><label>Hostel<input value={form.hostel} onChange={(event) => setForm({...form, hostel: event.target.value})}/></label><label>Block<input value={form.block} onChange={(event) => setForm({...form, block: event.target.value})}/></label></div>
+              <div className="student-modal-grid"><label>Room<input value={form.room} onChange={(event) => setForm({...form, room: event.target.value})}/></label><label>Phone<input value={form.phone} onChange={(event) => setForm({...form, phone: event.target.value})}/></label></div>
+              {form.email.trim().toLowerCase() !== (user?.email || '').toLowerCase() && <label>Current password<input type="password" value={form.current_password} onChange={(event) => setForm({...form, current_password: event.target.value})}/></label>}
               <button className="student-submit-button" type="submit" disabled={saving}><Save size={18}/>{saving ? 'Saving…' : 'Save Changes'}</button>
             </form>
           </div>}
@@ -544,6 +528,7 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
 
 function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotifications, onEdit, onPassword, onLogout, editing, setEditing, form, setForm, saving, saveError, saveSuccess, handleSave, pwOpen, setPwOpen, pwForm, setPwForm, pwSaving, pwError, pwSuccess, showPw, setShowPw, handleChangePassword }) {
     const displayName = profile?.full_name || 'Admin User';
+    const locationLine = 'Greenfield University Campus';
     const rating = avgRating && Number(avgRating) > 0 ? avgRating : '—';
     return (<div className="admin-profile-page">
       <div className="admin-profile-topline">
@@ -558,8 +543,8 @@ function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotificat
           <div className="admin-profile-avatar-body"/>
         </div>
         <h2>{displayName}</h2>
-        <div className="admin-profile-role"><span>Campus Maintenance Manager</span></div>
-        <div className="admin-profile-contacts"><span><Mail size={21}/>{user?.email || profile?.email || 'admin.user@campus.edu'}</span><span><Phone size={21}/>{profile?.phone || '+91 90000 00000'}</span></div>
+        <div className="admin-profile-role"><ShieldCheck size={24}/><span>Super Admin</span></div>
+        <div className="admin-profile-campus"><Building2 size={21}/><span>{locationLine}</span></div>
       </section>
 
       <section className="admin-profile-stats" aria-label="Admin profile statistics">
@@ -578,7 +563,7 @@ function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotificat
         <AdminProfileMenuRow icon={Edit3} label="Edit Profile" onClick={onEdit}/>
         <AdminProfileMenuRow icon={Lock} label="Change Password" onClick={onPassword}/>
         <AdminProfileMenuRow icon={Bell} label="Notification Settings" onClick={onNotifications}/>
-        <AdminProfileMenuRow icon={Settings} label="App Preferences" onClick={() => window.alert('App preferences opened.')}/>
+        <AdminProfileMenuRow icon={Building2} label="Department" onClick={onEdit}/>
         <AdminProfileMenuRow icon={HelpCircle} label="Help & Support" onClick={() => window.alert('CampusFix support: contact your campus maintenance help desk.')}/>
         <AdminProfileMenuRow icon={LogOut} label="Logout" danger onClick={onLogout}/>
       </section>

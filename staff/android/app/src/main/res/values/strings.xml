@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">CampusFix Staff</string>
-    <string name="title_activity_main">CampusFix Staff</string>
-    <string name="package_name">com.campusfix.staff</string>
-    <string name="custom_url_scheme">com.campusfix.staff</string>
-</resources>
