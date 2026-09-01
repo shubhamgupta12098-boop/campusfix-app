@@ -5935,6 +5935,17 @@ html.dark select {
   color: #2f8fff;
 }
 
+.staff-ui .campus-quick-action {
+  border-color: #03111f;
+  background: linear-gradient(135deg, #1475f0, #2691ff);
+  box-shadow: 0 10px 24px rgba(28, 126, 255, .35);
+}
+
+.staff-ui .campus-quick-action:hover,
+.staff-ui .campus-quick-action.is-active {
+  background: linear-gradient(135deg, #0f63d1, #1c7de0);
+}
+
 .staff-screen {
   width: 100%;
   color: #f7fbff;

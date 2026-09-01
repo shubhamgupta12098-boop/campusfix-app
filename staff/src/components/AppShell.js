@@ -351,12 +351,18 @@ export const AppShell = () => {
 
         {role === 'staff' ? (
           <nav className="campus-bottom-nav staff-bottom-nav" aria-label="Staff navigation">
-            {[
-              { id: 'dashboard', label: 'Home', icon: Home },
-              { id: 'technician-jobs', label: 'My Job', icon: Wrench },
-              { id: 'notifications', label: 'Alerts', icon: Bell },
-              { id: 'profile', label: 'My Profile', icon: UserCircle },
-            ].map(renderNavButton)}
+            {renderNavButton({ id: 'dashboard', label: 'Home', icon: Home })}
+            {renderNavButton({ id: 'technician-jobs', label: 'My Work', icon: Wrench })}
+            <button
+              type="button"
+              onClick={() => navigate('technician-jobs')}
+              className={'campus-quick-action ' + (activeScreen === 'technician-jobs' ? 'is-active' : '')}
+              aria-label="My Work"
+              aria-current={activeScreen === 'technician-jobs' ? 'page' : undefined}
+            >
+              <Plus size={31}/>
+            </button>
+            {renderNavButton({ id: 'profile', label: 'My Profile', icon: UserCircle })}
           </nav>
         ) : (
           <nav className="campus-bottom-nav" aria-label="Primary navigation">
