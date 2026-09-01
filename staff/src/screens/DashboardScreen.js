@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, StatCard, Card, Badge, Spinner, EmptyState } from '@/components/ui';
-import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
+import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo, staffStatusLabel } from '@/lib/constants';
 import { ClipboardList, CheckCircle2, Clock, AlertTriangle, PlusCircle, ArrowRight, Wrench, Users, UserCog, BarChart3, Star, Bell, Wifi, Utensils, BookOpen, ChevronRight } from 'lucide-react';
 const ACTIVE_STATUSES = ['submitted', 'verified', 'assigned', 'in_progress', 'waiting_approval'];
 const COMPLETED_STATUSES = ['resolved', 'closed'];
@@ -213,14 +213,6 @@ function StaffDashboard({ complaints, firstName, onNavigate, onOpenComplaint, un
         return Wrench;
     };
 
-    const statusLabel = (status) => {
-        if (status === 'assigned') return ['Assigned', 'assigned'];
-        if (status === 'in_progress') return ['In Progress', 'progress'];
-        if (status === 'waiting_approval') return ['Under Review', 'review'];
-        if (['resolved', 'closed'].includes(status)) return ['Closed', 'closed'];
-        return ['Open', 'open'];
-    };
-
     return (
       <div className="staff-screen staff-home-screen">
         <div className="staff-screen-header">
@@ -265,7 +257,7 @@ function StaffDashboard({ complaints, firstName, onNavigate, onOpenComplaint, un
           <div className="staff-task-list">
             {!recent.length ? <div className="staff-empty">No assigned jobs yet.</div> : recent.map((complaint) => {
                 const Icon = iconFor(complaint);
-                const [label, tone] = statusLabel(complaint.status);
+                const { label, tone } = staffStatusLabel(complaint.status);
                 const location = complaint.buildings?.name || complaint.location_description || 'Campus';
                 return (
                   <button key={complaint.id} type="button" onClick={() => onOpenComplaint(complaint.id)} className="staff-task-card">

@@ -34,6 +34,22 @@ export const PRIORITY_CONFIG = {
 export const STATUS_FLOW = [
     'submitted', 'verified', 'assigned', 'in_progress', 'waiting_approval', 'closed'
 ];
+// Single source of truth for how a complaint's status is labeled on the staff
+// (technician) screens. Home and My Work must always show the same label/tone
+// for the same status — previously each screen had its own copy of this
+// mapping and they had drifted apart (Home said "Assigned", My Work said
+// "Pending" for the same complaint), which made the status look wrong.
+export function staffStatusLabel(status) {
+    if (status === 'assigned')
+        return { label: 'Pending', tone: 'assigned' };
+    if (status === 'in_progress')
+        return { label: 'In Progress', tone: 'progress' };
+    if (status === 'waiting_approval')
+        return { label: 'Under Review', tone: 'review' };
+    if (['resolved', 'closed'].includes(status))
+        return { label: 'Closed', tone: 'closed' };
+    return { label: 'Open', tone: 'open' };
+}
 export function formatDate(dateStr) {
     if (!dateStr)
         return '—';
