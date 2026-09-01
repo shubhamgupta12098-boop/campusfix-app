@@ -9,6 +9,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
   mongoUri: String(process.env.MONGODB_URI || '').trim(),
+  mongoDbName: String(process.env.MONGODB_DB || 'ccmms').trim() || 'ccmms',
   jwtSecret: process.env.JWT_SECRET || 'dev-only-change-this-jwt-secret-before-production',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   firebaseApiKey: String(process.env.FIREBASE_API_KEY || '').trim(),
