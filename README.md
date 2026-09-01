@@ -1,73 +1,185 @@
-# V19 MongoDB connection update
+# CCMMS Full Stack — Student + Admin + Staff
 
-See `MONGODB-CONNECTION-V19.md`. The MongoDB connector now uses automatic SRV DNS retry like the supplied CampusFix reference project.
+Production-ready web app with three mobile portals in one repository:
 
-# CCMMS Full Stack — Render Ready
+- `/student/` — raise complaints, upload mandatory photo + optional video, track status, rate completed work
+- `/admin/` — genuine Yes/No review, staff assignment, approvals, reports, users, complaint/work evidence
+- `/staff/` — assigned jobs, alerts, before/after photos, completion notes
+- `/api/` — Express REST API
+- MongoDB — all users, complaints, notifications, work orders and evidence metadata
+- MongoDB GridFS — uploaded photos/videos
+- Firebase Authentication — **only Forgot Password email/reset flow**
 
-Student, Admin and Staff mobile portals run from one Node/Express service. All three portals use the same-origin `/api`, so there is no hardcoded development host in the frontend.
+## 1. Requirements
 
-## Architecture
+- Node.js 20 LTS or newer
+- npm 10+
+- MongoDB Atlas account (recommended) or local MongoDB
+- Firebase project with Email/Password Authentication enabled
 
-- React + Vite: Student, Admin, Staff
-- Node.js + Express REST API
-- MongoDB Atlas for application data
-- MongoDB GridFS for complaint photos/videos and before/after evidence
-- JWT + bcrypt for normal authentication
-- Firebase Authentication REST API only for Forgot Password emails
-- Render Web Service for frontend + backend together
+This is a React/Vite + Node web app, so **Gradle is not required**. The production build is handled by npm/Vite and is already configured for Render.
 
-## Required Render environment variables
-
-Set these in Render → Service → Environment:
-
-```env
-MONGODB_URI=mongodb+srv://DB_USER:DB_PASSWORD@YOUR_CLUSTER.mongodb.net/ccmms?retryWrites=true&w=majority
-JWT_SECRET=use-a-long-random-secret
-FIREBASE_API_KEY=your-firebase-web-api-key
-ADMIN_EMAIL=your-admin-email
-ADMIN_PASSWORD=your-strong-admin-password
-ADMIN_NAME=CCMMS Admin
-```
-
-`RENDER_EXTERNAL_URL` is supplied automatically by Render. You do not need to hardcode the public URL in source code. For the normal single-service deployment, `CORS_ORIGINS` can stay blank.
-
-## Render settings
-
-Use **Web Service**, not Static Site. If you use the included `render.yaml`, choose Render → New → Blueprint.
-
-- Build command: `npm install --include=dev --no-audit --no-fund && npm run build`
-- Start command: `npm start`
-- Health check: `/api/health`
-
-The `--include=dev` flag is important because Vite is a build dependency and must be installed even though the runtime environment is production.
-
-## Public routes after deployment
-
-- `/` portal chooser
-- `/student/` student portal
-- `/admin/` admin portal
-- `/staff/` staff portal
-- `/api` API information
-- `/api/health` health check
-
-## MongoDB Atlas
-
-Create a database user, allow network access for your Render deployment, and store the Atlas URI only in Render Environment. Never commit it to GitHub.
-
-## Firebase Forgot Password only
-
-Enable Firebase Authentication → Email/Password, copy the Web API Key into `FIREBASE_API_KEY`, and add your Render hostname under Firebase Authorized Domains. Normal sign-in remains MongoDB + JWT.
-
-## GitHub push
+## 2. Install
 
 ```bash
-git add .
-git commit -m "Make CCMMS Render production ready"
-git push origin main
+npm install
 ```
 
-Render Auto-Deploy will rebuild the service after the push.
+Copy environment file:
 
-## Security
+Windows:
 
-`.env` and credential files are ignored. Rotate any database password that has previously been posted publicly or committed to a repository.
+```bat
+copy .env.example .env
+```
+
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`.
+
+## 3. MongoDB Atlas
+
+1. Create a MongoDB Atlas cluster.
+2. Create a Database User.
+3. Network Access: allow your development IP. For Render, allow Render outbound access; for a simple demo you can use `0.0.0.0/0` with a strong DB username/password.
+4. Copy the connection string into:
+
+```env
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster-name.mongodb.net/ccmms?retryWrites=true&w=majority
+```
+
+The server automatically creates indexes and seeds categories/buildings plus demo accounts when the DB is empty.
+
+## 4. Firebase — Forgot Password only
+
+Firebase is not the main database and is not used for normal application data. It is only the password-reset bridge.
+
+1. Firebase Console → create/select project.
+2. Authentication → Sign-in method → enable **Email/Password**.
+3. Project Settings → General → copy **Web API Key**.
+4. Put it in `.env`:
+
+```env
+FIREBASE_API_KEY=your_firebase_web_api_key
+```
+
+5. Authentication → Settings → Authorized domains:
+   - add `localhost` for local testing
+   - after Render deploy, add your `your-app.onrender.com` domain
+6. Set:
+
+```env
+APP_BASE_URL=http://localhost:3000
+```
+
+On Render change it to your public URL.
+
+### How reset works
+
+- User presses Forgot Password.
+- Backend confirms the email belongs to a MongoDB account without exposing account existence.
+- Backend uses Firebase REST only to send the password reset email.
+- User sets a new password through Firebase's secure reset page.
+- On the first login with that new password, the CCMMS backend verifies it with Firebase and securely re-hashes/syncs the new password into MongoDB.
+- Normal logins after that are MongoDB + bcrypt + JWT.
+
+## 5. Local run
+
+Build all portals:
+
+```bash
+npm run build
+```
+
+Start API + all portals:
+
+```bash
+npm start
+```
+
+Open:
+
+- http://localhost:3000/student/
+- http://localhost:3000/admin/
+- http://localhost:3000/staff/
+- http://localhost:3000/api/health
+
+On Windows you can use `RUN-WINDOWS.bat` after creating `.env`.
+
+## 6. Demo accounts
+
+Seeded when `SEED_DEMO_USERS=true`:
+
+- Student: `student@campusfix.local` / `Student@123`
+- Admin: `admin@campusfix.local` / `Admin@123`
+- Staff: `staff@campusfix.local` / `Staff@123`
+
+These `.local` addresses are only demo logins and cannot receive real Firebase reset emails. Register/use a real email to test Forgot Password.
+
+## 7. Render deployment
+
+A `render.yaml` is included.
+
+### GitHub + Render
+
+1. Push this folder to GitHub.
+2. Render → New → Blueprint.
+3. Select the repository; Render reads `render.yaml`.
+4. Add these secret/environment values in Render:
+   - `MONGODB_URI`
+   - `FIREBASE_API_KEY`
+   - `APP_BASE_URL` = your Render URL, e.g. `https://ccmms-fullstack.onrender.com`
+   - `CORS_ORIGINS` can be blank if all portals use the same Render domain
+5. `JWT_SECRET` is generated by Render from the YAML.
+6. Deploy.
+7. Add the Render hostname to Firebase Authorized Domains.
+
+Render runs:
+
+```text
+Build: npm install --no-audit --no-fund && npm run build
+Start: npm start
+Health: /api/health
+```
+
+## 8. Frontend API configuration
+
+For production, Student/Admin/Staff are served by the same Express server, so no frontend API env is needed.
+
+For Vite hot reload, each portal can use:
+
+```env
+VITE_API_URL=http://localhost:3000
+```
+
+The frontend automatically falls back to `http://localhost:3000/api` on common Vite development ports.
+
+## 9. Media and complaint rules
+
+- Complaint **Photo \*** is mandatory.
+- Video is optional.
+- Backend rejects complaints that do not contain at least one photo, even if frontend validation is bypassed.
+- Media is uploaded through `/api/media` and stored in MongoDB GridFS.
+- Staff Before Photo is mandatory before work starts.
+- Staff After Photo is mandatory before work completion/approval.
+- Student/Admin/Staff complaint details can read the same work-order evidence from MongoDB.
+
+## 10. Security included
+
+- bcrypt password hashing
+- JWT authentication
+- role + ownership checks on data resources
+- Helmet security headers
+- configurable CORS
+- no password hashes returned by API
+- generic Forgot Password response to reduce account enumeration
+- server-side complaint photo validation
+- server-side before/after work evidence validation
+- MongoDB unique/indexed fields
+- environment secrets excluded by `.gitignore`
+
+See `docs/API.md` and `docs/RENDER-FIREBASE-MONGODB.md` for more detail.

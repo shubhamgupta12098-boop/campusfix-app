@@ -1,49 +1,30 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth';
+import { AuthScreen } from '@/screens/AuthScreen';
 import { AppShell } from '@/components/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-const EXPECTED_ROLE = 'admin';
-
-function Redirecting() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-        <p className="text-sm text-slate-400 font-medium">Opening secure login…</p>
-      </div>
-    </div>
-  );
-}
-
 function App() {
-  const { session, profile, loading } = useAuthStore();
-
-  useEffect(() => {
-    document.documentElement.classList.add('antialiased');
-    document.documentElement.classList.toggle('dark', localStorage.getItem('cmms_dark_mode') === 'true');
-  }, []);
-
-  useEffect(() => {
-    if (loading) return;
+    const { session, profile, loading } = useAuthStore();
+    useEffect(() => {
+        // ensure dark scrollbars don't appear
+        document.documentElement.classList.add('antialiased');
+        document.documentElement.classList.toggle('dark', localStorage.getItem('cmms_dark_mode') === 'true');
+    }, []);
+    if (loading) {
+        return (<div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-slate-200 border-t-blue-600 rounded-full animate-spin" style={{ borderTopWidth: '3px' }}/>
+          <p className="text-sm text-slate-500 font-medium">Loading…</p>
+        </div>
+      </div>);
+    }
     if (!session || !profile) {
-      window.location.replace('/');
-      return;
+        return (<ErrorBoundary>
+        <AuthScreen />
+      </ErrorBoundary>);
     }
-    if (profile.role !== EXPECTED_ROLE) {
-      window.location.replace('/');
-    }
-  }, [loading, session, profile]);
-
-  if (loading || !session || !profile || profile.role !== EXPECTED_ROLE) {
-    return <Redirecting />;
-  }
-
-  return (
-    <ErrorBoundary>
+    return (<ErrorBoundary>
       <AppShell />
-    </ErrorBoundary>
-  );
+    </ErrorBoundary>);
 }
-
 export default App;

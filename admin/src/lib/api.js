@@ -5,6 +5,9 @@ export const LOCAL_MODE = false;
 function apiRoot() {
   const configured = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
   if (configured) return configured.endsWith('/api') ? configured : configured + '/api';
+  if (typeof window !== 'undefined' && ['5173', '5174', '5175', '4173', '4174', '4175'].includes(window.location.port)) {
+    return 'http://localhost:3000/api';
+  }
   return '/api';
 }
 

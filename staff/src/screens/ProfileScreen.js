@@ -249,11 +249,11 @@ export function ProfileScreen({ onNavigate, unreadNotifications = 0 }) {
               <em>{completionRate}%</em>
             </div>
 
-            <button type="button" onClick={() => onNavigate?.('performance')} className="staff-profile-row staff-profile-performance-link">
-              <span className="staff-profile-row-icon"><TrendingUp size={21}/></span>
+            <div className="staff-profile-row">
+              <span className="staff-profile-row-icon"><Star size={20}/></span>
               <span><small>Performance</small><strong>{avgRating || '—'} / 5</strong><i className="staff-stars">★★★★★</i></span>
-              <ChevronRight size={18}/>
-            </button>
+              <em>{avgRating || '—'}</em>
+            </div>
 
             <button type="button" onClick={openEditor} className="staff-profile-row">
               <span className="staff-profile-row-icon"><Phone size={20}/></span>
