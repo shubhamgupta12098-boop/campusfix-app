@@ -7,78 +7,136 @@ import { downloadTextFile } from '@/lib/download';
 import {
   CalendarDays,
   CheckCircle2,
-  Clock,
+  ChevronDown,
+  ClipboardList,
   Download,
-  Info,
-  MessageCircle,
   FileSpreadsheet,
   FileText,
-  PieChart,
-  Star,
-  UserRoundCog,
+  Info,
+  MessageCircle,
   RefreshCw,
-  TrendingDown,
-  TrendingUp,
+  Star,
+  Wrench,
 } from 'lucide-react';
 
-const PALETTE = ['#6d40d8', '#2e7be6', '#37ad62', '#f28a2c', '#e8505b', '#14a7b8'];
+const PALETTE = ['#7c3aed', '#2f80ed', '#35b768', '#ff8a1f', '#ec4899', '#20c8e7'];
 
-const isResolved = (complaint) => ['resolved', 'closed'].includes(complaint.status);
-const safeDate = (value) => value ? new Date(value) : null;
-const hoursBetween = (from, to) => {
-  const start = safeDate(from);
-  const end = safeDate(to);
-  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  return Math.max(0, (end.getTime() - start.getTime()) / 3600000);
+const safeDate = (value) => (value ? new Date(value) : null);
+
+const toInputDate = (date) => {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
 };
 
+const defaultAdminDates = () => {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 29);
+  return { start: toInputDate(start), end: toInputDate(end) };
+};
+
+function statusBucket(status) {
+  const value = String(status || '').toLowerCase();
+  if (['closed', 'resolved', 'completed', 'rejected'].includes(value)) return 'closed';
+  if (['in_progress', 'waiting_approval', 'awaiting_approval', 'rework_required'].includes(value)) return 'in_progress';
+  return 'open';
+}
+
+function displayStatus(status) {
+  const bucket = statusBucket(status);
+  if (bucket === 'in_progress') return 'In Progress';
+  if (bucket === 'closed') return 'Closed';
+  return 'Open';
+}
+
 function periodBounds(days) {
-  if (days === 'all') return { start: null, previousStart: null, previousEnd: null };
+  if (days === 'all') return { start: null, end: null };
   const dayCount = Number(days);
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   const start = new Date(end);
   start.setDate(start.getDate() - dayCount + 1);
   start.setHours(0, 0, 0, 0);
-  const previousEnd = new Date(start);
-  previousEnd.setMilliseconds(-1);
-  const previousStart = new Date(previousEnd);
-  previousStart.setDate(previousStart.getDate() - dayCount + 1);
-  previousStart.setHours(0, 0, 0, 0);
-  return { start, end, previousStart, previousEnd };
+  return { start, end };
 }
 
-function filterByPeriod(rows, bounds, previous = false) {
-  if (!bounds.start) return previous ? [] : rows;
-  const start = previous ? bounds.previousStart : bounds.start;
-  const end = previous ? bounds.previousEnd : bounds.end;
+function dateBounds(startValue, endValue) {
+  const start = startValue ? new Date(`${startValue}T00:00:00`) : null;
+  const end = endValue ? new Date(`${endValue}T23:59:59.999`) : null;
+  return { start, end };
+}
+
+function filterByPeriod(rows, bounds) {
+  if (!bounds.start && !bounds.end) return rows;
   return rows.filter((row) => {
     const date = safeDate(row.created_at);
-    return date && date >= start && date <= end;
+    if (!date || Number.isNaN(date.getTime())) return false;
+    if (bounds.start && date < bounds.start) return false;
+    if (bounds.end && date > bounds.end) return false;
+    return true;
   });
 }
 
-function summarize(rows) {
-  const total = rows.length;
-  const resolvedRows = rows.filter(isResolved);
-  const resolved = resolvedRows.length;
-  const resolutionHours = resolvedRows
-    .map((row) => hoursBetween(row.created_at, row.resolved_at || row.updated_at))
-    .filter((value) => value !== null);
-  const avgResolutionHours = resolutionHours.length
-    ? resolutionHours.reduce((sum, value) => sum + value, 0) / resolutionHours.length
-    : 0;
-  const reopened = rows.filter((row) => row.status === 'reopened' || row.reopened_at || Number(row.reopen_count || 0) > 0).length;
-  const reopenedRate = total ? (reopened / total) * 100 : 0;
-  return { total, resolved, avgResolutionHours, reopened, reopenedRate };
+function rangeLabel(bounds) {
+  if (!bounds.start && !bounds.end) return 'All available data';
+  const options = { month: 'short', day: 'numeric', year: 'numeric' };
+  const start = bounds.start ? bounds.start.toLocaleDateString('en-US', options) : 'Beginning';
+  const end = bounds.end ? bounds.end.toLocaleDateString('en-US', options) : 'Today';
+  return `${start} – ${end}`;
 }
 
-function changePercent(current, previous) {
-  if (!previous) return current ? 100 : 0;
-  return ((current - previous) / Math.abs(previous)) * 100;
+function countStatuses(rows) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      acc[statusBucket(row.status)] += 1;
+      return acc;
+    },
+    { total: 0, open: 0, in_progress: 0, closed: 0 },
+  );
 }
 
-function DonutChart({ items, total }) {
+function categoryRows(categories, rows) {
+  return categories
+    .map((category, index) => ({
+      ...category,
+      color: PALETTE[index % PALETTE.length],
+      total: rows.filter((row) => row.category_id === category.id).length,
+    }))
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total);
+}
+
+function staffRows(technicians, rows) {
+  return technicians
+    .map((technician) => {
+      const assigned = rows.filter((row) => row.assigned_to === technician.id);
+      const closed = assigned.filter((row) => statusBucket(row.status) === 'closed').length;
+      return {
+        ...technician,
+        assigned: assigned.length,
+        closed,
+        rate: assigned.length ? Math.round((closed / assigned.length) * 100) : 0,
+      };
+    })
+    .filter((row) => row.assigned > 0)
+    .sort((a, b) => b.rate - a.rate || b.closed - a.closed);
+}
+
+function monthlyTrend(rows, endDate) {
+  const monthFormatter = new Intl.DateTimeFormat('en', { month: 'short' });
+  const anchor = endDate && !Number.isNaN(endDate.getTime()) ? endDate : new Date();
+  return Array.from({ length: 6 }, (_, offset) => {
+    const date = new Date(anchor.getFullYear(), anchor.getMonth() - (5 - offset), 1);
+    const value = rows.filter((row) => {
+      const created = safeDate(row.created_at);
+      return created && created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth();
+    }).length;
+    return { label: monthFormatter.format(date), value };
+  });
+}
+
+function DonutChart({ items, total, admin = false }) {
   let angle = 0;
   const segments = items.map((item) => {
     const start = angle;
@@ -86,7 +144,28 @@ function DonutChart({ items, total }) {
     angle += share;
     return `${item.color} ${start}deg ${angle}deg`;
   });
-  const background = segments.length ? `conic-gradient(${segments.join(', ')})` : '#e9eef5';
+  const background = segments.length ? `conic-gradient(${segments.join(', ')})` : '#183040';
+
+  if (admin) {
+    return (
+      <div className="admin-analytics-donut-wrap">
+        <div className="admin-analytics-donut" style={{ background }}>
+          <div><strong>{total}</strong><span>Total</span></div>
+        </div>
+        <div className="admin-analytics-legend">
+          {items.slice(0, 4).map((item) => (
+            <div key={item.id || item.name}>
+              <span style={{ backgroundColor: item.color }}/>
+              <b>{item.name}</b>
+              <strong>{total ? Math.round((item.total / total) * 100) : 0}%</strong>
+              <em>({item.total})</em>
+            </div>
+          ))}
+          {!items.length && <p>No category data in this range</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-5 min-h-[172px]">
@@ -112,26 +191,27 @@ function DonutChart({ items, total }) {
   );
 }
 
-function ResolutionBars({ buckets }) {
-  const max = Math.max(...buckets.map((bucket) => bucket.value), 1);
-  return (
-    <div className="h-[172px] flex items-end gap-4 px-2 pt-4">
-      {buckets.map((bucket) => (
-        <div key={bucket.label} className="flex-1 h-full flex flex-col justify-end items-center min-w-0">
-          <span className="text-xs font-bold text-slate-700 mb-1">{bucket.value}</span>
-          <div className="w-full max-w-[54px] rounded-t-md" style={{ height: `${Math.max(7, (bucket.value / max) * 115)}px`, backgroundColor: bucket.color }}/>
-          <span className="mt-2 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{bucket.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StaffBars({ rows }) {
+function StaffBars({ rows, admin = false }) {
   const topRows = rows.slice(0, 5);
+  if (admin) {
+    return (
+      <div className="admin-analytics-staff-bars">
+        {!topRows.length && <p className="admin-analytics-empty">No staff performance data in this range</p>}
+        {topRows.map((row) => (
+          <div key={row.id} className="admin-analytics-staff-row">
+            <span>{row.full_name}</span>
+            <div><i style={{ width: `${row.rate}%` }}/></div>
+            <strong>{row.rate}%</strong>
+          </div>
+        ))}
+        {!!topRows.length && <div className="admin-analytics-axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 pt-2">
-      {topRows.length === 0 && <p className="text-sm text-slate-400 py-12 text-center">No staff performance data yet</p>}
+      {!topRows.length && <p className="text-sm text-slate-400 py-12 text-center">No staff performance data yet</p>}
       {topRows.map((row, index) => (
         <div key={row.id} className="grid grid-cols-[112px_1fr_38px] items-center gap-2 text-xs">
           <span className="font-semibold text-slate-700 truncate">{row.full_name}</span>
@@ -145,31 +225,44 @@ function StaffBars({ rows }) {
   );
 }
 
-function TrendLine({ points }) {
+function TrendLine({ points, admin = false }) {
   const width = 360;
   const height = 150;
-  const padX = 24;
+  const padX = 28;
   const padTop = 18;
-  const padBottom = 28;
-  const max = Math.max(...points.map((point) => point.value), 1);
+  const padBottom = 30;
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+  const roundedMax = Math.max(4, Math.ceil(maxValue / 4) * 4);
   const coordinates = points.map((point, index) => {
     const x = points.length === 1 ? width / 2 : padX + (index * (width - padX * 2)) / (points.length - 1);
-    const y = padTop + (1 - point.value / max) * (height - padTop - padBottom);
+    const y = padTop + (1 - point.value / roundedMax) * (height - padTop - padBottom);
     return { ...point, x, y };
   });
   const path = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const areaPath = coordinates.length ? `${path} L ${coordinates.at(-1).x} ${height - padBottom} L ${coordinates[0].x} ${height - padBottom} Z` : '';
+  const gridColor = admin ? '#263949' : '#e8edf3';
+  const textColor = admin ? '#aeb8c2' : '#64748b';
+  const stroke = admin ? '#8b4cf2' : '#6d40d8';
 
   return (
-    <div className="h-[172px] w-full overflow-hidden">
+    <div className={admin ? 'admin-analytics-trend' : 'h-[172px] w-full overflow-hidden'}>
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" role="img" aria-label="Monthly complaints trend">
-        {[0.25, 0.5, 0.75, 1].map((line) => (
-          <line key={line} x1={padX} x2={width - padX} y1={padTop + (1 - line) * (height - padTop - padBottom)} y2={padTop + (1 - line) * (height - padTop - padBottom)} stroke="#e8edf3" strokeDasharray="4 5"/>
-        ))}
-        <path d={path} fill="none" stroke="#6d40d8" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+        <defs>
+          <linearGradient id={admin ? 'adminTrendFill' : 'trendFill'} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity={admin ? '.28' : '.12'}/>
+            <stop offset="100%" stopColor={stroke} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((line) => {
+          const y = padTop + (1 - line) * (height - padTop - padBottom);
+          return <line key={line} x1={padX} x2={width - 8} y1={y} y2={y} stroke={gridColor} strokeDasharray="4 5"/>;
+        })}
+        {areaPath && <path d={areaPath} fill={`url(#${admin ? 'adminTrendFill' : 'trendFill'})`}/>}        
+        <path d={path} fill="none" stroke={stroke} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
         {coordinates.map((point) => (
           <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="4.5" fill="#6d40d8" stroke="white" strokeWidth="2"/>
-            <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill="#64748b" fontWeight="600">{point.label}</text>
+            <circle cx={point.x} cy={point.y} r="4.5" fill={stroke} stroke={admin ? '#d8c5ff' : 'white'} strokeWidth="1.8"/>
+            <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill={textColor} fontWeight="600">{point.label}</text>
           </g>
         ))}
       </svg>
@@ -177,32 +270,34 @@ function TrendLine({ points }) {
   );
 }
 
-function Metric({ icon: Icon, label, value, delta, inverse = false, colorClass = 'bg-blue-50 text-blue-600' }) {
-  const improved = inverse ? delta <= 0 : delta >= 0;
-  const DeltaIcon = improved ? TrendingUp : TrendingDown;
+function AdminStatusButton({ id, activeStatus, onSelect, icon: Icon, label, value, tone }) {
+  const active = activeStatus === id;
   return (
-    <div className="px-4 py-4 min-w-0">
-      <div className="flex items-center gap-2 mb-3">
-        <span className={`w-9 h-9 rounded-full grid place-items-center ${colorClass}`}><Icon size={18}/></span>
-        <span className="text-xs font-semibold text-slate-600">{label}</span>
-      </div>
-      <strong className="text-3xl font-extrabold tracking-tight text-slate-900">{value}</strong>
-      <div className={`mt-2 flex items-center gap-1 text-[11px] font-semibold ${improved ? 'text-emerald-600' : 'text-rose-500'}`}>
-        <DeltaIcon size={12}/>
-        {Math.abs(delta).toFixed(1)}% vs previous period
-      </div>
-    </div>
+    <button
+      type="button"
+      className={`admin-report-status-button ${tone} ${active ? 'is-active' : ''}`}
+      onClick={() => onSelect(id)}
+      aria-pressed={active}
+    >
+      <span><Icon/></span>
+      <div><small>{label}</small><strong>{value}</strong></div>
+    </button>
   );
 }
 
 export function ReportsScreen({ onNavigate }) {
   const { profile } = useAuthStore();
+  const initialDates = useMemo(() => defaultAdminDates(), []);
   const [complaints, setComplaints] = useState([]);
   const [categories, setCategories] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [rangeDays, setRangeDays] = useState('30');
+  const [adminStartDate, setAdminStartDate] = useState(initialDates.start);
+  const [adminEndDate, setAdminEndDate] = useState(initialDates.end);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [activeStatus, setActiveStatus] = useState('all');
 
   useEffect(() => { void load(); }, []);
 
@@ -226,88 +321,43 @@ export function ReportsScreen({ onNavigate }) {
   };
 
   const report = useMemo(() => {
-    const bounds = periodBounds(rangeDays);
-    const currentRows = filterByPeriod(complaints, bounds);
-    const previousRows = filterByPeriod(complaints, bounds, true);
-    const current = summarize(currentRows);
-    const previous = summarize(previousRows);
-
-    const byCategory = categories
-      .map((category, index) => ({
-        ...category,
-        color: category.color || PALETTE[index % PALETTE.length],
-        total: currentRows.filter((row) => row.category_id === category.id).length,
-      }))
-      .filter((row) => row.total > 0)
-      .sort((a, b) => b.total - a.total);
-
-    const resolutionBuckets = [
-      { label: '< 4', min: 0, max: 4, color: '#6d40d8' },
-      { label: '4 – 12', min: 4, max: 12, color: '#2e7be6' },
-      { label: '12 – 24', min: 12, max: 24, color: '#37ad62' },
-      { label: '> 24', min: 24, max: Infinity, color: '#f28a2c' },
-    ].map((bucket) => ({
-      ...bucket,
-      value: currentRows.filter((row) => {
-        if (!isResolved(row)) return false;
-        const hours = hoursBetween(row.created_at, row.resolved_at || row.updated_at);
-        return hours !== null && hours >= bucket.min && hours < bucket.max;
-      }).length,
-    }));
-
-    const byTechnician = technicians.map((technician) => {
-      const assigned = currentRows.filter((row) => row.assigned_to === technician.id);
-      const resolved = assigned.filter(isResolved).length;
-      return {
-        ...technician,
-        assigned: assigned.length,
-        resolved,
-        rate: assigned.length ? Math.round((resolved / assigned.length) * 100) : 0,
-      };
-    }).filter((row) => row.assigned > 0).sort((a, b) => b.rate - a.rate || b.resolved - a.resolved);
-
-    const monthFormatter = new Intl.DateTimeFormat('en', { month: 'short' });
-    const now = new Date();
-    const monthlyTrend = Array.from({ length: 6 }, (_, offset) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (5 - offset), 1);
-      const value = complaints.filter((row) => {
-        const created = safeDate(row.created_at);
-        return created && created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth();
-      }).length;
-      return { label: monthFormatter.format(date), value };
-    });
-
-    const rangeLabel = !bounds.start
-      ? 'All available data'
-      : `${bounds.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${bounds.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const isAdmin = profile?.role === 'admin';
+    const bounds = isAdmin ? dateBounds(adminStartDate, adminEndDate) : periodBounds(rangeDays);
+    const periodRows = filterByPeriod(complaints, bounds);
+    const counts = countStatuses(periodRows);
+    const filteredRows = isAdmin && activeStatus !== 'all'
+      ? periodRows.filter((row) => statusBucket(row.status) === activeStatus)
+      : periodRows;
+    const categoriesForView = categoryRows(categories, filteredRows);
+    const staffForView = staffRows(technicians, periodRows);
+    const trend = monthlyTrend(filteredRows, bounds.end || new Date());
+    const rated = periodRows.filter((row) => Number(row.feedback_rating) > 0);
+    const avgRating = rated.length
+      ? (rated.reduce((sum, row) => sum + Number(row.feedback_rating || 0), 0) / rated.length).toFixed(1)
+      : '—';
 
     return {
-      currentRows,
-      current,
-      previous,
-      byCategory,
-      resolutionBuckets,
-      byTechnician,
-      monthlyTrend,
-      rangeLabel,
-      deltas: {
-        total: changePercent(current.total, previous.total),
-        resolved: changePercent(current.resolved, previous.resolved),
-        avgResolution: changePercent(current.avgResolutionHours, previous.avgResolutionHours),
-        reopened: changePercent(current.reopenedRate, previous.reopenedRate),
-      },
+      bounds,
+      periodRows,
+      filteredRows,
+      counts,
+      byCategory: categoriesForView,
+      byTechnician: staffForView,
+      monthlyTrend: trend,
+      avgRating,
+      rangeLabel: rangeLabel(bounds),
     };
-  }, [complaints, categories, technicians, rangeDays]);
+  }, [complaints, categories, technicians, profile?.role, rangeDays, adminStartDate, adminEndDate, activeStatus]);
 
   const exportCSV = async () => {
-    const rows = [['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Created', 'Resolved', 'Rating']];
-    report.currentRows.forEach((complaint) => {
+    const rows = [['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Created', 'Closed Date', 'Rating']];
+    report.filteredRows.forEach((complaint) => {
       rows.push([
         complaint.complaint_no,
         complaint.title,
         complaint.complaint_categories?.name || '',
         complaint.priority,
-        complaint.status,
+        displayStatus(complaint.status),
         formatDate(complaint.created_at),
         complaint.resolved_at ? formatDate(complaint.resolved_at) : '',
         complaint.feedback_rating?.toString() || '',
@@ -325,39 +375,106 @@ export function ReportsScreen({ onNavigate }) {
     }
   };
 
+  const resetAdminDates = () => {
+    const next = defaultAdminDates();
+    setAdminStartDate(next.start);
+    setAdminEndDate(next.end);
+  };
+
   if (loading) return <Spinner/>;
 
   if (profile?.role === 'admin') {
-    const rated = report.currentRows.filter((row) => Number(row.feedback_rating) > 0);
-    const avgRating = rated.length ? (rated.reduce((sum, row) => sum + Number(row.feedback_rating || 0), 0) / rated.length).toFixed(1) : '—';
-    const staffAverage = report.byTechnician.length ? Math.round(report.byTechnician.reduce((sum, row) => sum + row.rate, 0) / report.byTechnician.length) : 0;
-    const resolvedDelta = report.deltas.resolved;
-    const avgDays = (report.current.avgResolutionHours / 24).toFixed(1);
+    const statusName = activeStatus === 'all' ? 'All complaints' : activeStatus === 'in_progress' ? 'In Progress' : activeStatus[0].toUpperCase() + activeStatus.slice(1);
+
     return (
-      <div className="admin-screen admin-reports-screen">
-        <div className="admin-report-metrics">
-          <section className="admin-report-metric"><span><CheckCircle2/></span><div><small>Resolved this month</small><strong>{report.current.resolved}</strong><em className={resolvedDelta >= 0 ? 'up' : 'down'}>{resolvedDelta >= 0 ? '↑' : '↓'} {Math.abs(resolvedDelta).toFixed(0)}% <i>vs last month</i></em></div></section>
-          <section className="admin-report-metric"><span><Clock/></span><div><small>Avg Resolution Time</small><strong>{avgDays}<b> days</b></strong><em className={report.deltas.avgResolution <= 0 ? 'up' : 'down'}>{report.deltas.avgResolution <= 0 ? '↓' : '↑'} {Math.abs(report.deltas.avgResolution / 100 * Number(avgDays || 0)).toFixed(1)} days <i>vs last month</i></em></div></section>
-          <section className="admin-report-metric admin-category-metric"><span><PieChart/></span><div className="admin-report-category-wrap"><small>Top Categories</small><DonutChart items={report.byCategory} total={report.current.total}/></div></section>
-          <button type="button" className="admin-report-metric admin-staff-metric admin-rating-link" onClick={() => onNavigate?.('feedback')} aria-label="Open feedback and ratings"><span><UserRoundCog/></span><div><small>Staff Performance</small><p>Average Rating</p><strong className="rating"><Star fill="currentColor"/>{avgRating}<b>/5</b></strong><em className="up">↑ {staffAverage}% completion</em></div></button>
-        </div>
-
-        <div className="admin-report-range">
-          <CalendarDays size={27}/><div><small>Date Range</small><strong>{report.rangeLabel}</strong></div>
-          <label><CalendarDays size={20}/><select value={rangeDays} onChange={(e) => setRangeDays(e.target.value)}><option value="7">Last 7 days</option><option value="30">Change Range</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
-        </div>
-
-        <section className="admin-download-panel">
-          <h2><Download size={21}/>Downloadable Reports</h2>
-          {[
-            ['Monthly Maintenance Report','Summary of complaints with resolutions and performance'],
-            ['Complaint Trend','Trend analysis of complaints over time by status'],
-            ['Staff Workload','Workload distribution and performance summary for staff members'],
-          ].map(([title, desc]) => <div className="admin-download-row" key={title}><span><FileText size={21}/></span><div><strong>{title}</strong><small>{desc}</small></div><button type="button" onClick={exportCSV}><Download size={19}/>Export</button></div>)}
-          <p className="admin-report-note"><Info size={16}/>Reports export using the data in the selected range.</p>
+      <div className="admin-screen admin-reports-screen admin-analytics-v2">
+        <section className="admin-report-date-shell">
+          <button type="button" className="admin-report-date-trigger" onClick={() => setCalendarOpen((value) => !value)} aria-expanded={calendarOpen}>
+            <CalendarDays/>
+            <span><small>Date Range</small><strong>{report.rangeLabel}</strong></span>
+            <ChevronDown className={calendarOpen ? 'is-open' : ''}/>
+          </button>
+          {calendarOpen && (
+            <div className="admin-report-calendar-panel">
+              <label>From<input type="date" value={adminStartDate} max={adminEndDate || undefined} onChange={(event) => setAdminStartDate(event.target.value)}/></label>
+              <label>To<input type="date" value={adminEndDate} min={adminStartDate || undefined} onChange={(event) => setAdminEndDate(event.target.value)}/></label>
+              <div>
+                <button type="button" onClick={resetAdminDates}>Last 30 days</button>
+                <button type="button" onClick={() => { setAdminStartDate(''); setAdminEndDate(''); }}>All time</button>
+                <button type="button" className="primary" onClick={() => setCalendarOpen(false)}>Done</button>
+              </div>
+            </div>
+          )}
         </section>
 
-        <div className="admin-report-export-all"><strong><FileText size={20}/>Export All Reports</strong><button type="button" onClick={() => window.print()}><FileText size={19}/>Export as PDF</button><button type="button" onClick={exportCSV} disabled={exporting}><FileSpreadsheet size={19}/>{exporting ? 'Exporting…' : 'Export as CSV'}</button></div>
+        <div className="admin-report-status-grid" aria-label="Complaint status filters">
+          <AdminStatusButton id="all" activeStatus={activeStatus} onSelect={setActiveStatus} icon={ClipboardList} label="Total Complaints" value={report.counts.total} tone="total"/>
+          <AdminStatusButton id="open" activeStatus={activeStatus} onSelect={setActiveStatus} icon={MessageCircle} label="Open" value={report.counts.open} tone="open"/>
+          <AdminStatusButton id="in_progress" activeStatus={activeStatus} onSelect={setActiveStatus} icon={Wrench} label="In Progress" value={report.counts.in_progress} tone="progress"/>
+          <AdminStatusButton id="closed" activeStatus={activeStatus} onSelect={setActiveStatus} icon={CheckCircle2} label="Closed" value={report.counts.closed} tone="closed"/>
+        </div>
+        <p className="admin-report-filter-help">Tap a status to filter complaint charts · <strong>{statusName}</strong> ({report.filteredRows.length})</p>
+
+        <div className="admin-report-chart-grid">
+          <section className="admin-analytics-card">
+            <h2>Complaints by Category <Info/></h2>
+            <DonutChart items={report.byCategory} total={report.filteredRows.length} admin/>
+            <p>Total Complaints: <strong>{report.filteredRows.length}</strong></p>
+          </section>
+
+          <section className="admin-analytics-card">
+            <h2>Monthly Trend <Info/></h2>
+            <TrendLine points={report.monthlyTrend} admin/>
+            <p>Complaints Over Time</p>
+          </section>
+        </div>
+
+        <section className="admin-analytics-card admin-staff-performance-card">
+          <h2>Staff Performance <Info/></h2>
+          <div className="admin-staff-performance-layout">
+            <div>
+              <StaffBars rows={report.byTechnician} admin/>
+              {!!report.byTechnician.length && <p className="admin-performance-caption">Performance Score (%)</p>}
+            </div>
+            <div className="admin-performance-rating">
+              <Star fill="currentColor"/>
+              <strong>{report.avgRating}<b>/5</b></strong>
+              <span>Average Rating</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="admin-analytics-card admin-status-summary-card">
+          <h2>Complaint Status Summary</h2>
+          <div className="admin-status-summary-grid">
+            <div className="total"><span><ClipboardList/></span><small>Total Complaints</small><strong>{report.counts.total}</strong></div>
+            <div className="open"><span><MessageCircle/></span><small>Open</small><strong>{report.counts.open}</strong></div>
+            <div className="progress"><span><Wrench/></span><small>In Progress</small><strong>{report.counts.in_progress}</strong></div>
+            <div className="closed"><span><CheckCircle2/></span><small>Closed</small><strong>{report.counts.closed}</strong></div>
+          </div>
+        </section>
+
+        <section className="admin-download-panel admin-download-panel-v2">
+          <h2><Download size={21}/>Downloadable Reports</h2>
+          {[
+            ['Monthly Maintenance Report', 'Summary of complaints by status and staff performance'],
+            ['Complaint Trend', 'Trend analysis of complaints over time by status'],
+            ['Staff Workload', 'Workload distribution and performance summary for staff members'],
+          ].map(([title, desc]) => (
+            <div className="admin-download-row" key={title}>
+              <span><FileText size={21}/></span>
+              <div><strong>{title}</strong><small>{desc}</small></div>
+              <button type="button" onClick={exportCSV}><Download size={19}/>Export</button>
+            </div>
+          ))}
+          <p className="admin-report-note"><Info size={16}/>Exports use the selected date range and active status filter.</p>
+        </section>
+
+        <div className="admin-report-export-all">
+          <strong><FileText size={20}/>Export Reports</strong>
+          <button type="button" onClick={() => window.print()}><FileText size={19}/>Export as PDF</button>
+          <button type="button" onClick={exportCSV} disabled={exporting}><FileSpreadsheet size={19}/>{exporting ? 'Exporting…' : 'Export as CSV'}</button>
+        </div>
       </div>
     );
   }
@@ -368,7 +485,7 @@ export function ReportsScreen({ onNavigate }) {
         <div>
           <p className="text-[11px] uppercase tracking-[.16em] font-bold text-blue-600 mb-1">Campus administration</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-950">Reports &amp; Analytics</h1>
-          <p className="text-sm text-slate-500 mt-1">Live complaint, resolution and staff performance insights</p>
+          <p className="text-sm text-slate-500 mt-1">Live complaint status and staff performance insights</p>
         </div>
         <button onClick={load} className="w-10 h-10 rounded-xl border border-slate-200 bg-white grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50" aria-label="Refresh report">
           <RefreshCw size={17}/>
@@ -389,60 +506,41 @@ export function ReportsScreen({ onNavigate }) {
         </select>
       </div>
 
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Total Complaints</p><strong className="text-2xl text-slate-900">{report.counts.total}</strong></div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Open</p><strong className="text-2xl text-emerald-600">{report.counts.open}</strong></div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">In Progress</p><strong className="text-2xl text-cyan-600">{report.counts.in_progress}</strong></div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Closed</p><strong className="text-2xl text-blue-600">{report.counts.closed}</strong></div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="font-extrabold text-slate-900">Complaints by Category</h2>
-            <Info size={16} className="text-slate-400"/>
-          </div>
-          <DonutChart items={report.byCategory} total={report.current.total}/>
-          <p className="text-xs text-slate-400 mt-1">Total Complaints: <span className="font-bold text-slate-600">{report.current.total}</span></p>
+          <div className="flex items-center gap-2 mb-1"><h2 className="font-extrabold text-slate-900">Complaints by Category</h2><Info size={16} className="text-slate-400"/></div>
+          <DonutChart items={report.byCategory} total={report.filteredRows.length}/>
+          <p className="text-xs text-slate-400 mt-1">Total Complaints: <span className="font-bold text-slate-600">{report.filteredRows.length}</span></p>
         </section>
 
         <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2">
-            <h2 className="font-extrabold text-slate-900">Resolution Time (Hours)</h2>
-            <Info size={16} className="text-slate-400"/>
-          </div>
-          <ResolutionBars buckets={report.resolutionBuckets}/>
-          <p className="text-xs text-slate-400">Average Resolution Time: <span className="font-bold text-slate-600">{report.current.avgResolutionHours.toFixed(1)} hours</span></p>
-        </section>
-
-        <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="font-extrabold text-slate-900">Staff Performance</h2>
-            <Info size={16} className="text-slate-400"/>
-          </div>
-          <StaffBars rows={report.byTechnician}/>
-          <p className="text-xs text-slate-400 mt-5">Resolved Complaints (%)</p>
-        </section>
-
-        <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2">
-            <h2 className="font-extrabold text-slate-900">Monthly Trend</h2>
-            <Info size={16} className="text-slate-400"/>
-          </div>
+          <div className="flex items-center gap-2"><h2 className="font-extrabold text-slate-900">Monthly Trend</h2><Info size={16} className="text-slate-400"/></div>
           <TrendLine points={report.monthlyTrend}/>
           <p className="text-xs text-slate-400">Complaints Over Time</p>
         </section>
+
+        <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5 lg:col-span-2">
+          <div className="flex items-center gap-2 mb-4"><h2 className="font-extrabold text-slate-900">Staff Performance</h2><Info size={16} className="text-slate-400"/></div>
+          <div className="grid md:grid-cols-[1fr_180px] gap-6 items-center">
+            <div><StaffBars rows={report.byTechnician}/><p className="text-xs text-slate-400 mt-5">Performance Score (%)</p></div>
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 text-center">
+              <Star className="mx-auto text-amber-400 fill-amber-400" size={34}/>
+              <strong className="block text-3xl text-slate-900 mt-2">{report.avgRating}<span className="text-base text-slate-500">/5</span></strong>
+              <span className="text-xs text-slate-500">Average Rating</span>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <section className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-        <div className="px-4 sm:px-5 pt-4 flex items-center gap-2">
-          <h2 className="font-extrabold text-slate-900">Summary</h2>
-          <Info size={16} className="text-slate-400"/>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-          <Metric icon={MessageCircle} label="Total Complaints" value={report.current.total} delta={report.deltas.total} colorClass="bg-violet-50 text-violet-600"/>
-          <Metric icon={CheckCircle2} label="Resolved" value={report.current.resolved} delta={report.deltas.resolved} colorClass="bg-blue-50 text-blue-600"/>
-          <Metric icon={Clock} label="Avg Resolution Time" value={`${report.current.avgResolutionHours.toFixed(1)} hrs`} delta={report.deltas.avgResolution} inverse colorClass="bg-emerald-50 text-emerald-600"/>
-          <Metric icon={RefreshCw} label="Reopened Rate" value={`${report.current.reopenedRate.toFixed(1)}%`} delta={report.deltas.reopened} inverse colorClass="bg-orange-50 text-orange-600"/>
-        </div>
-      </section>
-
       <button onClick={exportCSV} disabled={exporting} className="w-full min-h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-60">
-        <Download size={21}/>
-        {exporting ? 'Exporting Report…' : 'Export Report'}
+        <Download size={21}/>{exporting ? 'Exporting Report…' : 'Export Report'}
       </button>
     </div>
   );

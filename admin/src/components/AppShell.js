@@ -98,8 +98,9 @@ const ADMIN_SCREEN_TITLES = {
     dashboard: 'Campus Maintenance',
     approvals: 'Work Approvals',
     'work-orders': 'Work Orders',
+    'my-jobs': 'My Jobs',
     assign: 'Assign Complaints',
-    reports: 'Reports',
+    reports: 'Reports & Analytics',
     users: 'User Management',
     feedback: 'Feedback & Ratings',
     notifications: 'Notifications',
@@ -202,6 +203,7 @@ export const AppShell = () => {
         ? role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign'
         : role === 'admin' && ['users', 'notifications'].includes(screen) ? 'assign'
         : role === 'admin' && screen === 'feedback' ? 'reports'
+        : role === 'admin' && screen === 'my-jobs' ? 'work-orders'
         : screen;
 
     const initials = (profile?.full_name || 'CampusFix User')
@@ -295,9 +297,8 @@ export const AppShell = () => {
                     Clear all
                   </button>
                 ) : (
-                  <button type="button" onClick={() => navigate('notifications')} className="campus-icon-button campus-alert-button" aria-label="Open notifications">
-                    <Bell size={25}/>
-                    {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+                  <button type="button" onClick={() => navigate('my-jobs')} className="campus-icon-button admin-jobs-shortcut" aria-label="Open My Jobs" title="My Jobs">
+                    <Plus size={24}/>
                   </button>
                 )}
                 {screen !== 'notifications' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
@@ -337,6 +338,7 @@ export const AppShell = () => {
             {screen === 'users' && <UserManagementScreen/>}
             {screen === 'assign' && <AssignComplaintsScreen onOpenComplaint={openComplaint}/>}
             {screen === 'work-orders' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
+            {screen === 'my-jobs' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
             {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint}/>}
             {screen === 'profile' && <ProfileScreen onNavigate={navigate}/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}

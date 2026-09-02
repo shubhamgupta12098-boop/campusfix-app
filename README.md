@@ -1,7 +1,3 @@
-# V19 MongoDB connection update
-
-See `MONGODB-CONNECTION-V19.md`. The MongoDB connector now uses automatic SRV DNS retry like the supplied CampusFix reference project.
-
 # CCMMS Full Stack — Render Ready
 
 Student, Admin and Staff mobile portals run from one Node/Express service. All three portals use the same-origin `/api`, so there is no hardcoded development host in the frontend.
