@@ -25,7 +25,11 @@ function portalRole(req) {
 }
 
 function publicUser(profile) {
-  return { uid: profile.id, email: profile.email, displayName: profile.full_name };
+  return { uid: profile.id, email: profile.email, displayName: profile.full_name, role: profile.role };
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function issueToken(profile) {
@@ -49,31 +53,40 @@ export async function requireAuth(req, res, next) {
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const identifier = String(req.body?.identifier || req.body?.email || '').trim();
     const password = String(req.body?.password || '');
     const expectedRole = portalRole(req);
-    if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+    if (!identifier || !password) return res.status(400).json({ error: 'Email/ID and password are required.' });
 
     const authCollection = dbCollection('auth_users');
-    const authUser = await authCollection.findOne({ email });
-    if (!authUser) return res.status(401).json({ error: 'Invalid email or password.' });
-    const profile = cleanDoc(await dbCollection('profiles').findOne({ id: authUser.profile_id }));
-    if (!profile) return res.status(401).json({ error: 'Profile not found.' });
+    const profiles = dbCollection('profiles');
+    let authUser = null;
+    let profile = null;
+
+    if (identifier.includes('@')) {
+      authUser = await authCollection.findOne({ email: identifier.toLowerCase() });
+      if (authUser) profile = cleanDoc(await profiles.findOne({ id: authUser.profile_id }));
+    } else {
+      profile = cleanDoc(await profiles.findOne({
+        college_id: { $regex: `^${escapeRegex(identifier)}$`, $options: 'i' },
+      }));
+      if (profile) authUser = await authCollection.findOne({ profile_id: profile.id });
+    }
+
+    if (!authUser || !profile) return res.status(401).json({ error: 'Invalid email/ID or password.' });
     if (expectedRole && profile.role !== expectedRole) return res.status(403).json({ error: `Please use a ${expectedRole[0].toUpperCase() + expectedRole.slice(1)} account on this portal.` });
     if (profile.is_active === false) return res.status(403).json({ error: 'Your account is inactive.' });
 
     let valid = await bcrypt.compare(password, authUser.password_hash || '');
-    if (!valid && config.firebaseApiKey) {
-      // Firebase is only used as the forgot-password bridge. After a Firebase
-      // reset succeeds, the first login with the new password re-syncs MongoDB.
-      valid = await verifyFirebasePassword(email, password);
+    if (!valid && config.firebaseApiKey && authUser.email) {
+      valid = await verifyFirebasePassword(authUser.email, password);
       if (valid) {
         await authCollection.updateOne({ id: authUser.id }, {
           $set: { password_hash: await bcrypt.hash(password, 12), updated_at: new Date().toISOString() },
         });
       }
     }
-    if (!valid) return res.status(401).json({ error: 'Invalid email or password.' });
+    if (!valid) return res.status(401).json({ error: 'Invalid email/ID or password.' });
 
     return res.json({ token: issueToken(profile), user: publicUser(profile), profile });
   } catch (error) { next(error); }
@@ -81,14 +94,17 @@ authRouter.post('/login', async (req, res, next) => {
 
 authRouter.post('/signup', async (req, res, next) => {
   try {
-    const expectedRole = portalRole(req) || 'student';
+    const requestedRole = String(req.body?.role || '').trim().toLowerCase();
+    const expectedRole = portalRole(req) || (['student', 'staff', 'admin'].includes(requestedRole) ? requestedRole : 'student');
     if (expectedRole === 'admin' && !config.allowAdminSignup) return res.status(403).json({ error: 'Admin self-signup is disabled. Use the seeded admin or create admins from User Management.' });
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const fullName = String(req.body?.fullName || '').trim();
-    if (!email || !password || !fullName) return res.status(400).json({ error: 'Name, email and password are required.' });
+    const collegeId = String(req.body?.college_id || req.body?.collegeId || '').trim();
+    if (!email || !password || !fullName || !collegeId) return res.status(400).json({ error: 'Name, college/employee ID, email and password are required.' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (await dbCollection('auth_users').findOne({ email })) return res.status(409).json({ error: 'This email is already registered.' });
+    if (await dbCollection('profiles').findOne({ college_id: { $regex: `^${escapeRegex(collegeId)}$`, $options: 'i' } })) return res.status(409).json({ error: 'This college/employee ID is already registered.' });
 
     const now = new Date().toISOString();
     const id = newId('profile');
@@ -97,7 +113,7 @@ authRouter.post('/signup', async (req, res, next) => {
       email,
       full_name: fullName,
       role: expectedRole,
-      college_id: req.body?.college_id || '',
+      college_id: collegeId,
       department: req.body?.department || '',
       hostel: req.body?.hostel || '',
       block: req.body?.block || '',

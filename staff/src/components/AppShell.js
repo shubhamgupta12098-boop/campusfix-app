@@ -30,6 +30,7 @@ import { TechnicianJobsScreen } from '@/screens/TechnicianJobsScreen';
 import { AssignComplaintsScreen } from '@/screens/AssignComplaintsScreen';
 import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
+import { PerformanceScreen } from '@/screens/PerformanceScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { supabase } from '@/lib/supabase';
@@ -343,6 +344,7 @@ export const AppShell = () => {
             {screen === 'work-orders' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
             {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint}/>}
             {screen === 'profile' && <ProfileScreen onNavigate={navigate} unreadNotifications={unreadNotifications}/>}
+            {screen === 'performance' && <PerformanceScreen onNavigate={navigate} unreadNotifications={unreadNotifications}/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}
           </ErrorBoundary>
         </main>

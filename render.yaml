@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: ccmms-fullstack
+    name: campusfix-app
     runtime: node
     plan: free
     autoDeploy: true
-    buildCommand: npm install --no-audit --no-fund && npm run build
+    buildCommand: npm install --include=dev --no-audit --no-fund && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -18,13 +18,17 @@ services:
         value: 7d
       - key: MONGODB_URI
         sync: false
+      - key: MONGODB_DB
+        value: ccmms
       - key: FIREBASE_API_KEY
         sync: false
-      - key: APP_BASE_URL
+      - key: ADMIN_EMAIL
         sync: false
-      - key: CORS_ORIGINS
+      - key: ADMIN_PASSWORD
         sync: false
+      - key: ADMIN_NAME
+        value: CCMMS Admin
       - key: SEED_DEMO_USERS
-        value: "true"
+        value: "false"
       - key: ALLOW_ADMIN_SIGNUP
         value: "false"

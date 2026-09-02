@@ -4,23 +4,41 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000/api" },
-    { "key": "token", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "https://YOUR-SERVICE.onrender.com/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
   ],
   "item": [
     {
       "name": "Health",
-      "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
     },
     {
       "name": "Student Login",
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Portal-Role", "value": "student" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Portal-Role",
+            "value": "student"
+          }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"email\": \"student@campusfix.local\",\n  \"password\": \"Student@123\"\n}" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"student@campusfix.local\",\n  \"password\": \"Student@123\"\n}"
+        },
         "url": "{{baseUrl}}/auth/login"
       }
     },
@@ -29,8 +47,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{token}}" },
-          { "key": "X-Portal-Role", "value": "student" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Portal-Role",
+            "value": "student"
+          }
         ],
         "url": "{{baseUrl}}/auth/me"
       }
@@ -40,10 +64,19 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Portal-Role", "value": "student" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Portal-Role",
+            "value": "student"
+          }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"email\": \"real-user@example.com\"\n}" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"real-user@example.com\"\n}"
+        },
         "url": "{{baseUrl}}/auth/forgot-password"
       }
     },
@@ -51,7 +84,12 @@
       "name": "Complaints",
       "request": {
         "method": "GET",
-        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
         "url": "{{baseUrl}}/data/complaints"
       }
     }
