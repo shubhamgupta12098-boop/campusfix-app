@@ -29,7 +29,7 @@ import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const NAV_ITEMS = [
@@ -163,7 +163,7 @@ export const AppShell = () => {
             return;
         let active = true;
         const loadUnread = async () => {
-            let query = supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+            let query = localData.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
             // Students only receive a single actionable alert when completed
             // work is approved. Staff/admin keep their operational alerts.
             if (role === 'student')
@@ -172,7 +172,7 @@ export const AppShell = () => {
             if (active)
                 setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
             if (role === 'admin') {
-                const approvals = await supabase.from('work_orders').select('*').eq('approval_status', 'pending');
+                const approvals = await localData.from('work_orders').select('*').eq('approval_status', 'pending');
                 if (active)
                     setPendingApprovals(Array.isArray(approvals.data) ? approvals.data.length : 0);
             }
@@ -297,8 +297,9 @@ export const AppShell = () => {
                     Clear all
                   </button>
                 ) : (
-                  <button type="button" onClick={() => navigate('my-jobs')} className="campus-icon-button admin-jobs-shortcut" aria-label="Open My Jobs" title="My Jobs">
-                    <Plus size={24}/>
+                  <button type="button" onClick={() => navigate('notifications')} className="campus-icon-button admin-jobs-shortcut admin-alert-shortcut" aria-label="Open notifications" title="Notifications">
+                    <Bell size={22}/>
+                    {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
                   </button>
                 )}
                 {screen !== 'notifications' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}

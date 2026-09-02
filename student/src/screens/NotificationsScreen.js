@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Spinner, EmptyState } from '@/components/ui';
 import { timeAgo } from '@/lib/constants';
@@ -39,7 +39,7 @@ export function NotificationsScreen({ onOpenComplaint }) {
 
     const load = async () => {
         if (!profile?.id) return;
-        const { data } = await supabase
+        const { data } = await localData
             .from('notifications')
             .select('*')
             .eq('user_id', profile.id)
@@ -50,12 +50,12 @@ export function NotificationsScreen({ onOpenComplaint }) {
     };
 
     const markAllRead = async () => {
-        await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
+        await localData.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
         void load();
     };
 
     const openNotification = async (notification) => {
-        if (!notification.is_read) await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+        if (!notification.is_read) await localData.from('notifications').update({ is_read: true }).eq('id', notification.id);
         if (notification.related_id) {
             onOpenComplaint(notification.related_id);
             return;

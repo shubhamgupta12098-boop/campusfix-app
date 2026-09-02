@@ -26,7 +26,7 @@ import { ComplaintDetailScreen } from '@/screens/ComplaintDetailScreen';
 import { NotificationsScreen } from '@/screens/NotificationsScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const NAV_ITEMS = [
@@ -158,7 +158,7 @@ export const AppShell = () => {
             return;
         let active = true;
         const loadUnread = async () => {
-            let query = supabase.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
+            let query = localData.from('notifications').select('*').eq('user_id', profile.id).eq('is_read', false);
             // Students only receive a single actionable alert when completed
             // work is approved. Staff/admin keep their operational alerts.
             if (role === 'student')
@@ -167,7 +167,7 @@ export const AppShell = () => {
             if (active)
                 setUnreadNotifications(Array.isArray(result.data) ? result.data.length : 0);
             if (role === 'admin') {
-                const approvals = await supabase.from('work_orders').select('*').eq('approval_status', 'pending');
+                const approvals = await localData.from('work_orders').select('*').eq('approval_status', 'pending');
                 if (active)
                     setPendingApprovals(Array.isArray(approvals.data) ? approvals.data.length : 0);
             }

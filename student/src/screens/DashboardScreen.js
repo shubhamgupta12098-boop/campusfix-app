@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, StatCard, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
@@ -26,9 +26,9 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
         setError(null);
         try {
             const [catRes, bldRes, profileRes] = await Promise.all([
-                supabase.from('complaint_categories').select('*').order('name'),
-                supabase.from('buildings').select('*').order('name'),
-                isAdmin ? supabase.from('profiles').select('*').order('full_name') : Promise.resolve({ data: [], error: null }),
+                localData.from('complaint_categories').select('*').order('name'),
+                localData.from('buildings').select('*').order('name'),
+                isAdmin ? localData.from('profiles').select('*').order('full_name') : Promise.resolve({ data: [], error: null }),
             ]);
             const firstError = catRes.error || bldRes.error || profileRes.error;
             if (firstError)
@@ -41,7 +41,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
                 role: String(p.role || 'student').toLowerCase(),
                 is_active: p.is_active !== false,
             })));
-            let query = supabase
+            let query = localData
                 .from('complaints')
                 .select('*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
                 .order('created_at', { ascending: false });

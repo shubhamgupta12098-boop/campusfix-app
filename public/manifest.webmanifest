@@ -1,0 +1,9 @@
+{
+  "name": "CCMMS Campus Maintenance",
+  "short_name": "CCMMS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020c09",
+  "theme_color": "#03130f",
+  "icons": []
+}

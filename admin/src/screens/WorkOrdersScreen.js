@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { Spinner, EmptyState } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
 import { CalendarDays, ClipboardList, Eye, Pencil, UserRound } from 'lucide-react';
@@ -21,7 +21,7 @@ export function WorkOrdersScreen({ onOpenComplaint }) {
   const load = async () => {
     setLoading(true);
     setError('');
-    const { data, error: loadError } = await supabase.from('work_orders').select('*').order('created_at', { ascending: false });
+    const { data, error: loadError } = await localData.from('work_orders').select('*').order('created_at', { ascending: false });
     if (loadError) setError(loadError.message);
     setOrders(data || []);
     setLoading(false);

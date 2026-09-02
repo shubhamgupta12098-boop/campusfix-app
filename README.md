@@ -1,69 +1,123 @@
-# CCMMS Full Stack — Render Ready
+# CCMMS — Render + MongoDB Mobile Build
 
-Student, Admin and Staff mobile portals run from one Node/Express service. All three portals use the same-origin `/api`, so there is no hardcoded development host in the frontend.
+This package is the `CCMMS-icon-fixes` project converted to a production full-stack build.
 
-## Architecture
+## Included
 
-- React + Vite: Student, Admin, Staff
+- Mobile-first Student, Staff and Admin portals (max-width phone UI on desktop, responsive on real phones)
+- Unified mobile login at `/`
+- Login using Email / College ID / Employee ID
+- Student/Staff Create Account
+- Role-based redirect to `/student/`, `/staff/`, or `/admin/`
 - Node.js + Express REST API
-- MongoDB Atlas for application data
-- MongoDB GridFS for complaint photos/videos and before/after evidence
-- JWT + bcrypt for normal authentication
-- Firebase Authentication REST API only for Forgot Password emails
-- Render Web Service for frontend + backend together
+- MongoDB Atlas for accounts, complaints, work orders, notifications, reports data
+- MongoDB GridFS for uploaded complaint/work photos and videos (persistent on Render)
+- JWT authentication + secure same-origin session cookie
+- bcrypt password hashing
+- Optional Firebase Authentication password-reset email flow
+- Render Blueprint (`render.yaml`) with auto deploy on GitHub commit
+- `/api/health` health check
 
-## Required Render environment variables
+## Local test (uses MongoDB Atlas)
 
-Set these in Render → Service → Environment:
+1. Install Node.js 20+.
+2. Copy `.env.example` to `.env`.
+3. Put your real `MONGODB_URI` in `.env`.
+4. Optional: add `FIREBASE_API_KEY` for Forgot Password.
+5. Run:
 
-```env
-MONGODB_URI=mongodb+srv://DB_USER:DB_PASSWORD@YOUR_CLUSTER.mongodb.net/ccmms?retryWrites=true&w=majority
-JWT_SECRET=use-a-long-random-secret
-FIREBASE_API_KEY=your-firebase-web-api-key
-ADMIN_EMAIL=your-admin-email
-ADMIN_PASSWORD=your-strong-admin-password
-ADMIN_NAME=CCMMS Admin
+```bash
+npm install
+npm run build
+npm start
 ```
 
-`RENDER_EXTERNAL_URL` is supplied automatically by Render. You do not need to hardcode the public URL in source code. For the normal single-service deployment, `CORS_ORIGINS` can stay blank.
-
-## Render settings
-
-Use **Web Service**, not Static Site. If you use the included `render.yaml`, choose Render → New → Blueprint.
-
-- Build command: `npm install --include=dev --no-audit --no-fund && npm run build`
-- Start command: `npm start`
-- Health check: `/api/health`
-
-The `--include=dev` flag is important because Vite is a build dependency and must be installed even though the runtime environment is production.
-
-## Public routes after deployment
-
-- `/` portal chooser
-- `/student/` student portal
-- `/admin/` admin portal
-- `/staff/` staff portal
-- `/api` API information
-- `/api/health` health check
+Open `http://localhost:3000`.
 
 ## MongoDB Atlas
 
-Create a database user, allow network access for your Render deployment, and store the Atlas URI only in Render Environment. Never commit it to GitHub.
+Create a database user and get the **Drivers** connection string. Set:
 
-## Firebase Forgot Password only
-
-Enable Firebase Authentication → Email/Password, copy the Web API Key into `FIREBASE_API_KEY`, and add your Render hostname under Firebase Authorized Domains. Normal sign-in remains MongoDB + JWT.
-
-## GitHub push
-
-```bash
-git add .
-git commit -m "Make CCMMS Render production ready"
-git push origin main
+```env
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/ccmms?retryWrites=true&w=majority&appName=CCMMS
+MONGODB_DB=ccmms
 ```
 
-Render Auto-Deploy will rebuild the service after the push.
+If the password contains `@`, `#`, `/`, `:` or other reserved URL characters, URL-encode it.
 
-## Security
+For first testing, Atlas Network Access can temporarily allow `0.0.0.0/0`; restrict it later where possible.
 
-`.env` and credential files are ignored. Rotate any database password that has previously been posted publicly or committed to a repository.
+## Admin account
+
+Set these environment variables before first start:
+
+```env
+ADMIN_EMAIL=your-admin@example.com
+ADMIN_PASSWORD=YourStrongPassword123!
+ADMIN_NAME=CCMMS Admin
+```
+
+The backend creates the first Admin in MongoDB if it does not already exist. Admin self-signup is disabled by default.
+
+## Firebase Forgot Password (optional)
+
+1. Firebase Console → Authentication → Sign-in method → enable **Email/Password**.
+2. Project Settings → Web API Key.
+3. Set `FIREBASE_API_KEY` in `.env` / Render.
+
+When a user clicks Forgot Password, Firebase sends a reset email. After the user chooses a new Firebase password, the next successful login syncs that password back into the MongoDB bcrypt credential.
+
+## Render deployment
+
+Push the project root to GitHub. In Render either create a Blueprint from `render.yaml`, or create a Node Web Service manually.
+
+Required Render environment values:
+
+- `MONGODB_URI`
+- `MONGODB_DB=ccmms`
+- `JWT_SECRET` (Render Blueprint generates this automatically)
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `ADMIN_NAME`
+- `FIREBASE_API_KEY` (only if Forgot Password email is required)
+
+Build command:
+
+```text
+npm install --include=dev --no-audit --no-fund && npm run build
+```
+
+Start command:
+
+```text
+npm start
+```
+
+Health check:
+
+```text
+/api/health
+```
+
+`render.yaml` uses `autoDeployTrigger: commit`, so after the service is linked to the GitHub branch, new commits can trigger deployment automatically.
+
+## API overview
+
+- `GET /api/health`
+- `POST /api/auth/login`
+- `POST /api/auth/signup`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `POST /api/auth/change-password`
+- `POST /api/auth/change-email`
+- `POST /api/auth/forgot-password`
+- `GET /api/data/:store`
+- `GET /api/data/:store/:id`
+- `PUT /api/data/:store/:id`
+- `POST /api/data/:store/bulk`
+- `POST /api/data/:store/delete-many`
+- `POST /api/media`
+- `POST /api/media/data-url`
+- `GET /api/media/:id`
+
+The frontend now uses these APIs. Browser IndexedDB/local JSON is no longer the production data source.

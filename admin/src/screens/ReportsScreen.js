@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
@@ -303,7 +303,7 @@ export function ReportsScreen({ onNavigate }) {
 
   const load = async () => {
     setLoading(true);
-    let complaintQuery = supabase
+    let complaintQuery = localData
       .from('complaints')
       .select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)')
       .order('created_at', { ascending: false });
@@ -311,8 +311,8 @@ export function ReportsScreen({ onNavigate }) {
 
     const [complaintResult, categoryResult, technicianResult] = await Promise.all([
       complaintQuery,
-      supabase.from('complaint_categories').select('*'),
-      supabase.from('profiles').select('*').eq('role', 'staff'),
+      localData.from('complaint_categories').select('*'),
+      localData.from('profiles').select('*').eq('role', 'staff'),
     ]);
     setComplaints(complaintResult.data || []);
     setCategories(categoryResult.data || []);

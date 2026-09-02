@@ -32,7 +32,7 @@ import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { subscribeNotificationChanges } from '@/lib/notificationBus';
 
@@ -161,7 +161,7 @@ export const AppShell = () => {
         if (!profile?.id) return;
         let active = true;
         const loadUnread = async () => {
-            let query = supabase.from('notifications').select('*').eq('user_id', profile.id);
+            let query = localData.from('notifications').select('*').eq('user_id', profile.id);
             if (role === 'student') query = query.eq('type', 'work_completed');
             const result = await query;
             if (active) {
@@ -171,7 +171,7 @@ export const AppShell = () => {
                 setUnreadNotifications(rows.filter((item) => item?.is_read !== true).length);
             }
             if (role === 'admin') {
-                const approvals = await supabase.from('work_orders').select('*').eq('approval_status', 'pending');
+                const approvals = await localData.from('work_orders').select('*').eq('approval_status', 'pending');
                 if (active) setPendingApprovals(Array.isArray(approvals.data) ? approvals.data.length : 0);
             }
         };
@@ -212,7 +212,7 @@ export const AppShell = () => {
         .join('')
         .toUpperCase();
 
-    const renderNavButton = ({ id, label, icon: Icon }) => {
+    const renderNavButton = ({ id, label, icon: Icon, iconVariant }) => {
         const active = activeScreen === id;
         const count = id === 'notifications' ? unreadNotifications : 0;
         return (<button
@@ -222,7 +222,7 @@ export const AppShell = () => {
           className={'campus-nav-item ' + (active ? 'is-active' : '')}
           aria-current={active ? 'page' : undefined}
         >
-          <span className="campus-nav-icon">
+          <span className={'campus-nav-icon ' + (iconVariant === 'circle' ? 'campus-nav-icon-circle' : '')}>
             <Icon size={22} strokeWidth={active ? 2.6 : 2}/>
             {count > 0 && <span className="campus-nav-badge">{count > 9 ? '9+' : count}</span>}
           </span>
@@ -351,8 +351,7 @@ export const AppShell = () => {
           <nav className="campus-bottom-nav staff-bottom-nav" aria-label="Staff navigation">
             {[
               { id: 'dashboard', label: 'Home', icon: Home },
-              { id: 'technician-jobs', label: 'My Job', icon: Wrench },
-              { id: 'notifications', label: 'Alerts', icon: Bell },
+              { id: 'technician-jobs', label: 'My Job', icon: Plus, iconVariant: 'circle' },
               { id: 'profile', label: 'My Profile', icon: UserCircle },
             ].map(renderNavButton)}
           </nav>

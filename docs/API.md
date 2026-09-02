@@ -1,99 +1,32 @@
-# CCMMS REST API
+# CCMMS API
 
-Base URL: `/api`
+All protected routes accept `Authorization: Bearer <JWT>` and the portals also send `X-Portal-Role` (`student`, `staff`, or `admin`). A same-origin HttpOnly session cookie is issued as a fallback.
 
-All authenticated requests use:
+## Authentication
 
-```http
-Authorization: Bearer <JWT>
-X-Portal-Role: student | admin | staff
-```
-
-## Health
-
-`GET /api/health`
-
-## Auth
-
-- `POST /api/auth/login`
-- `POST /api/auth/signup`
-- `GET /api/auth/me`
-- `POST /api/auth/change-password`
-- `POST /api/auth/change-email`
-- `POST /api/auth/forgot-password` — Firebase email only
-
-Example login:
-
+### POST `/api/auth/login`
 ```json
-{
-  "email": "student@campusfix.local",
-  "password": "Student@123"
-}
+{ "identifier": "STU-001 or user@example.com", "password": "..." }
 ```
 
-Successful response:
+### POST `/api/auth/signup`
+Student/Staff self-signup. Send `X-Portal-Role: student` or `staff`.
 
+### GET `/api/auth/me`
+Returns current user/profile.
+
+### POST `/api/auth/forgot-password`
 ```json
-{
-  "token": "<jwt>",
-  "user": { "uid": "...", "email": "...", "displayName": "..." },
-  "profile": { "id": "...", "role": "student" }
-}
+{ "email": "user@example.com" }
 ```
+Requires `FIREBASE_API_KEY` for email delivery.
 
 ## Data resources
 
-The existing app's Supabase-style query wrapper now maps to these MongoDB REST resources:
+Supported stores: `profiles`, `technicians`, `complaints`, `complaint_categories`, `buildings`, `notifications`, `work_orders`, `complaint_status_history`.
 
-- `profiles`
-- `technicians`
-- `complaints`
-- `complaint_categories`
-- `buildings`
-- `notifications`
-- `work_orders`
-- `complaint_status_history`
-
-Routes:
-
-- `GET /api/data/:store`
-- `GET /api/data/:store/:id`
-- `PUT /api/data/:store/:id`
-- `POST /api/data/:store/bulk`
-- `POST /api/data/:store/delete-many`
-
-The server applies role/ownership scopes. Students do not receive all student complaints, and staff complaint/work-order reads are scoped to their jobs.
+Role visibility and write rules are enforced on the backend.
 
 ## Media
 
-`POST /api/media`
-
-Multipart form-data field: `file`
-
-Supported: image/* and video/*, max 25 MB.
-
-`POST /api/media/data-url`
-
-```json
-{
-  "dataUrl": "data:image/jpeg;base64,...",
-  "filename": "complaint-photo.jpg"
-}
-```
-
-Media is stored in MongoDB GridFS. Returned URLs look like:
-
-```text
-https://your-app.onrender.com/api/media/<gridfs-id>
-```
-
-`GET /api/media/:id` streams the file.
-
-## Validation
-
-Complaint save is rejected unless at least one photo URL/image media item exists.
-
-Work order save is rejected when:
-
-- status is `in_progress` and no `before_photo_urls` exists
-- status is `awaiting_approval`, `completed`, or `closed` and no `completion_photo_urls` exists
+Uploads are stored in MongoDB GridFS so they survive Render instance restarts.

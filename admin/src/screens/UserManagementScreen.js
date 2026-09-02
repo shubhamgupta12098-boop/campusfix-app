@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { Spinner, EmptyState } from '@/components/ui';
 import { ChevronDown, Filter, Mail, Pencil, Phone, Plus, Search, Trash2, UserRound, Users } from 'lucide-react';
 
@@ -16,7 +16,7 @@ export function UserManagementScreen() {
   const load = async () => {
     setLoading(true);
     setError(null);
-    const { data, error: loadError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    const { data, error: loadError } = await localData.from('profiles').select('*').order('created_at', { ascending: false });
     if (loadError) setError(loadError.message);
     setUsers((data || []).map((u) => ({
       ...u,
@@ -28,13 +28,13 @@ export function UserManagementScreen() {
   };
 
   const toggleActive = async (user) => {
-    const { error: updateError } = await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
+    const { error: updateError } = await localData.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
     if (updateError) return setError(updateError.message);
     void load();
   };
 
   const changeRole = async (user, role) => {
-    const { error: updateError } = await supabase.from('profiles').update({ role }).eq('id', user.id);
+    const { error: updateError } = await localData.from('profiles').update({ role }).eq('id', user.id);
     if (updateError) return setError(updateError.message);
     void load();
   };

@@ -266,6 +266,23 @@ button {
   place-items: center;
 }
 
+.campus-nav-icon-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #041019;
+  background: var(--campus-blue, #2dd7ed);
+}
+
+.campus-nav-icon-circle svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.staff-ui .campus-nav-icon-circle {
+  background: var(--admin-cyan, #2dd7ed);
+}
+
 .campus-nav-badge {
   position: absolute;
   top: -8px;
@@ -7575,7 +7592,7 @@ html.dark select {
 
 
 /* Staff V9 notification + 4-tab navigation fixes */
-.staff-ui .campus-bottom-nav.staff-bottom-nav{grid-template-columns:repeat(4,minmax(0,1fr));padding-left:10px;padding-right:10px}.staff-alert-count{position:absolute;right:-2px;top:-3px;min-width:18px;height:18px;padding:0 4px;border:2px solid #071a2d;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;line-height:14px;text-align:center}.staff-notifications-screen{padding-top:24px}.staff-notification-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}.staff-notification-heading>div>span{display:block;color:#50a7ff;font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase}.staff-notification-heading h1{margin:4px 0 0;color:#fff;font-size:27px;font-weight:820;letter-spacing:-.7px}.staff-notification-heading p{margin:5px 0 0;color:#8ea3b8;font-size:12px}.staff-notification-heading button{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 11px;border:1px solid #2a4b68;border-radius:11px;background:#0a2238;color:#dfeeff;font-size:11px;font-weight:750}.staff-notification-list{display:grid;gap:10px}.staff-notification-card{position:relative;display:flex;width:100%;align-items:flex-start;gap:12px;padding:14px;border:1px solid #18344f;border-radius:16px;background:#081b2d;text-align:left}.staff-notification-card.is-unread{border-color:#286aa2;background:linear-gradient(135deg,#0a2742,#081b2d)}.staff-notification-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:13px;background:#103555;color:#4aa4ff}.staff-notification-copy{min-width:0;flex:1}.staff-notification-copy strong{display:block;color:#f6fbff;font-size:13px;font-weight:780}.staff-notification-copy p{margin:4px 0 0;color:#a8b8c8;font-size:12px;line-height:1.45}.staff-notification-copy small{display:block;margin-top:7px;color:#6f879c;font-size:10px}.staff-notification-unread{position:absolute;top:16px;right:14px;width:8px;height:8px;border-radius:50%;background:#40a7ff;box-shadow:0 0 0 4px rgba(64,167,255,.12)}.staff-notification-empty{display:grid;justify-items:center;gap:7px;padding:42px 20px;border:1px dashed #27455f;border-radius:18px;color:#8197aa;text-align:center;background:#071827}.staff-notification-empty strong{color:#e9f4fc;font-size:14px}.staff-notification-empty span{max-width:260px;font-size:12px;line-height:1.5}.student-submit-button:disabled{cursor:not-allowed;opacity:.55}
+.staff-ui .campus-bottom-nav.staff-bottom-nav{grid-template-columns:repeat(3,minmax(0,1fr));padding-left:10px;padding-right:10px}.staff-alert-count{position:absolute;right:-2px;top:-3px;min-width:18px;height:18px;padding:0 4px;border:2px solid #071a2d;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;line-height:14px;text-align:center}.staff-notifications-screen{padding-top:24px}.staff-notification-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}.staff-notification-heading>div>span{display:block;color:#50a7ff;font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase}.staff-notification-heading h1{margin:4px 0 0;color:#fff;font-size:27px;font-weight:820;letter-spacing:-.7px}.staff-notification-heading p{margin:5px 0 0;color:#8ea3b8;font-size:12px}.staff-notification-heading button{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 11px;border:1px solid #2a4b68;border-radius:11px;background:#0a2238;color:#dfeeff;font-size:11px;font-weight:750}.staff-notification-list{display:grid;gap:10px}.staff-notification-card{position:relative;display:flex;width:100%;align-items:flex-start;gap:12px;padding:14px;border:1px solid #18344f;border-radius:16px;background:#081b2d;text-align:left}.staff-notification-card.is-unread{border-color:#286aa2;background:linear-gradient(135deg,#0a2742,#081b2d)}.staff-notification-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:13px;background:#103555;color:#4aa4ff}.staff-notification-copy{min-width:0;flex:1}.staff-notification-copy strong{display:block;color:#f6fbff;font-size:13px;font-weight:780}.staff-notification-copy p{margin:4px 0 0;color:#a8b8c8;font-size:12px;line-height:1.45}.staff-notification-copy small{display:block;margin-top:7px;color:#6f879c;font-size:10px}.staff-notification-unread{position:absolute;top:16px;right:14px;width:8px;height:8px;border-radius:50%;background:#40a7ff;box-shadow:0 0 0 4px rgba(64,167,255,.12)}.staff-notification-empty{display:grid;justify-items:center;gap:7px;padding:42px 20px;border:1px dashed #27455f;border-radius:18px;color:#8197aa;text-align:center;background:#071827}.staff-notification-empty strong{color:#e9f4fc;font-size:14px}.staff-notification-empty span{max-width:260px;font-size:12px;line-height:1.5}.student-submit-button:disabled{cursor:not-allowed;opacity:.55}
 
 .staff-ui .student-hidden-topbar{display:none!important}
 

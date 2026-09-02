@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, MessageSquare, Star, Tag, UserRound } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Card, EmptyState, Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
@@ -18,7 +18,7 @@ export function FeedbackScreen({ onOpenComplaint }) {
   const load = async () => {
     setLoading(true);
     setError('');
-    let query = supabase.from('complaints').select('*, profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)').order('updated_at', { ascending: false });
+    let query = localData.from('complaints').select('*, profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)').order('updated_at', { ascending: false });
     if (!isAdmin && profile?.id) query = query.eq('user_id', profile.id);
     const { data, error: e } = await query;
     if (e) setError(e.message);

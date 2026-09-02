@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, STATUS_FLOW, PRIORITY_CONFIG, formatDate, onImageError } from '@/lib/constants';
@@ -66,7 +66,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         window.addEventListener('storage', onStorage);
         window.addEventListener('focus', refreshEvidence);
         document.addEventListener('visibilitychange', onVisibility);
-        // Keep Admin evidence live even when the Staff portal updates MongoDB through the shared API
+        // Keep Admin evidence live when the Staff portal updates data through the shared local API
         // without a browser storage event (common in same-origin multi-tab use).
         const evidenceTimer = window.setInterval(refreshEvidence, 2500);
         let channel = null;
@@ -85,7 +85,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
     const load = async ({ quiet = false } = {}) => {
         if (!quiet) setLoading(true);
         setLoadError('');
-        const { data, error } = await supabase
+        const { data, error } = await localData
             .from('complaints')
             .select('*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
             .eq('id', complaintId)
@@ -99,7 +99,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         let loadedComplaint = data;
         if (role === 'admin' && data?.status === 'submitted' && !data?.admin_viewed_at && profile?.id) {
             const viewedAt = new Date().toISOString();
-            await supabase.from('complaints').update({
+            await localData.from('complaints').update({
                 admin_viewed_at: viewedAt,
                 admin_viewed_by: profile.id,
                 admin_review_status: 'pending',
@@ -113,14 +113,14 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             && !data?.rating_prompt_shown_at;
         if (shouldShowRatingOnce) {
             const shownAt = new Date().toISOString();
-            await supabase.from('complaints').update({ rating_prompt_shown_at: shownAt }).eq('id', complaintId);
+            await localData.from('complaints').update({ rating_prompt_shown_at: shownAt }).eq('id', complaintId);
             loadedComplaint = { ...data, rating_prompt_shown_at: shownAt };
             // Give the student a moment to see the completed complaint detail,
             // then show the rating prompt. It is automatically shown only once.
             window.setTimeout(() => setFeedbackOpen(true), 500);
         }
         setComplaint(loadedComplaint);
-        const { data: histData } = await supabase
+        const { data: histData } = await localData
             .from('complaint_status_history')
             .select('*, profiles!changed_by(full_name)')
             .eq('complaint_id', complaintId)
@@ -134,7 +134,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             changed_by_name: h.profiles?.full_name || 'System',
         }));
         setHistory(hist);
-        const { data: workOrders } = await supabase
+        const { data: workOrders } = await localData
             .from('work_orders')
             .select('*')
             .eq('complaint_id', complaintId)
@@ -146,7 +146,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             || null;
         setWorkOrder(evidenceWorkOrder);
         if (role === 'admin') {
-            const { data: staffData } = await supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true);
+            const { data: staffData } = await localData.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true);
             setTechnicians(staffData || []);
             setSelectedTech(loadedComplaint?.assigned_to || '');
         }
@@ -180,7 +180,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         }
         setSavingEdit(true);
         setEditMessage('');
-        const latest = await supabase.from('complaints').select('*').eq('id', complaint.id).maybeSingle();
+        const latest = await localData.from('complaints').select('*').eq('id', complaint.id).maybeSingle();
         if (latest.error || !latest.data) {
             setSavingEdit(false);
             setEditMessage(latest.error?.message || 'Complaint could not be checked.');
@@ -195,7 +195,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         }
         const category = EDIT_CATEGORIES.find((item) => item.id === editCategoryId) || EDIT_CATEGORIES[0];
         const editedAt = new Date().toISOString();
-        const result = await supabase.from('complaints').update({
+        const result = await localData.from('complaints').update({
             title: editTitle.trim(),
             description: editDescription.trim(),
             category_id: category.id,
@@ -205,7 +205,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             student_last_edited_at: editedAt,
         }).eq('id', complaint.id);
         if (!result.error) {
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: complaint.id,
                 old_status: 'submitted',
                 new_status: 'submitted',
@@ -228,7 +228,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         setAdminMessage('');
         const now = new Date().toISOString();
         const nextStatus = isGenuine ? 'verified' : 'rejected';
-        const result = await supabase.from('complaints').update({
+        const result = await localData.from('complaints').update({
             status: nextStatus,
             admin_review_status: isGenuine ? 'approved' : 'rejected',
             admin_reviewed_at: now,
@@ -236,7 +236,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
             ...(isGenuine ? { verified_at: now } : { rejected_at: now, rejection_reason: 'Admin marked this complaint as not genuine.' }),
         }).eq('id', complaint.id);
         if (!result.error) {
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: complaint.id,
                 old_status: 'submitted',
                 new_status: nextStatus,
@@ -259,20 +259,20 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         setAdminMessage('');
         const selected = technicians.find((item) => item.id === selectedTech);
         const now = new Date().toISOString();
-        const result = await supabase.from('complaints').update({
+        const result = await localData.from('complaints').update({
             status: 'assigned',
             assigned_to: selectedTech,
             assigned_at: now,
         }).eq('id', complaint.id);
         if (!result.error) {
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: complaint.id,
                 old_status: complaint.status,
                 new_status: 'assigned',
                 changed_by: profile.id,
                 remarks: `Assigned to ${selected?.full_name || 'staff'} after admin verification.`,
             });
-            await supabase.from('notifications').insert({
+            await localData.from('notifications').insert({
                 user_id: selectedTech,
                 title: 'New Job Assigned',
                 message: `${complaint.complaint_no}: ${complaint.title}`,
@@ -299,13 +299,13 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         setClosing(true);
         setCloseMessage('');
         const now = new Date().toISOString();
-        const { error } = await supabase.from('complaints').update({
+        const { error } = await localData.from('complaints').update({
             status: 'closed',
             closed_at: now,
             updated_at: now,
         }).eq('id', complaint.id);
         if (!error) {
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: complaint.id,
                 old_status: complaint.status,
                 new_status: 'closed',
@@ -334,7 +334,7 @@ export function ComplaintDetailScreen({ complaintId, onBack }) {
         setSubmittingFeedback(true);
         setFeedbackMessage('');
         const submittedAt = new Date().toISOString();
-        const { data: updateResult, error } = await supabase
+        const { data: updateResult, error } = await localData
             .from('complaints')
             .update({
                 feedback_rating: Number(rating),

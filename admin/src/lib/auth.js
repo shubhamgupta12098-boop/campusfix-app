@@ -62,26 +62,27 @@ export const useAuthStore = create((set, get) => ({
             return { error: message(e) };
         }
     },
-    // Firebase is used only for the Forgot Password email flow; app authentication/data remain on the CCMMS API + MongoDB.
-    sendPasswordResetLink: async (email) => {
+    resetForgottenPassword: async (email, newPassword) => {
         try {
-            const result = await api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email: email.trim().toLowerCase() }) });
-            return { error: null, message: result.message || null };
+            const result = await api('/auth/forgot-password', {
+                method: 'POST',
+                body: JSON.stringify({ email: email.trim().toLowerCase() }),
+            });
+            return { error: null, message: result.message || 'Password reset email sent.' };
         }
         catch (e) {
             return { error: message(e) };
         }
     },
-    confirmPasswordReset: async (oobCode, newPassword) => {
+    signOut: async () => {
+        try { await api('/auth/logout', { method: 'POST' }); } catch {}
+        setToken(null);
         try {
-            await api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ oobCode, newPassword }) });
-            return { error: null };
-        }
-        catch (e) {
-            return { error: message(e) };
-        }
+            ['student', 'admin', 'staff'].forEach((role) => localStorage.removeItem(`campusfix_${role}_session_token`));
+            sessionStorage.removeItem('ccmms_login_handoff');
+        } catch {}
+        set({ session: null, user: null, profile: null });
     },
-    signOut: async () => { setToken(null); set({ session: null, user: null, profile: null }); },
     refreshProfile: async () => {
         try {
             const r = await api('/auth/me');
@@ -96,8 +97,10 @@ export const useAuthStore = create((set, get) => ({
 }));
 (async () => {
     try {
-        if (!getToken())
-            return useAuthStore.setState({ loading: false });
+        // getToken() also consumes the short-lived login handoff when present.
+        getToken();
+        // Always ask /me once. The localhost server also accepts its same-origin
+        // HttpOnly session cookie, so a successful login cannot bounce back to /.
         const r = await api('/auth/me');
         useAuthStore.setState({ user: r.user, profile: r.profile, session: { user: r.user }, loading: false });
     }

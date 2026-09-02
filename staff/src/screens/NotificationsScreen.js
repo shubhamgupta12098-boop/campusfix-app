@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner, EmptyState } from '@/components/ui';
 import { timeAgo } from '@/lib/constants';
@@ -47,7 +47,7 @@ export function NotificationsScreen({ onOpenComplaint }) {
   });
 
   const load = async () => {
-    let query = supabase.from('notifications').select('*').eq('user_id', profile?.id);
+    let query = localData.from('notifications').select('*').eq('user_id', profile?.id);
     if (profile?.role === 'student') query = query.eq('type', 'work_completed');
     const { data } = await query.order('created_at', { ascending: false }).limit(50);
     setNotifications(data || []);
@@ -56,12 +56,12 @@ export function NotificationsScreen({ onOpenComplaint }) {
 
   const markAllRead = async () => {
     const ids = notifications.filter((item) => item?.is_read !== true).map((item) => item.id).filter(Boolean);
-    if (ids.length) await supabase.from('notifications').update({ is_read: true }).in('id', ids);
+    if (ids.length) await localData.from('notifications').update({ is_read: true }).in('id', ids);
     await load();
   };
 
   const openNotification = async (notification) => {
-    if (!notification.is_read) await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+    if (!notification.is_read) await localData.from('notifications').update({ is_read: true }).eq('id', notification.id);
     if (notification.related_id) return onOpenComplaint(notification.related_id);
     void load();
   };

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner, EmptyState } from '@/components/ui';
 import { onImageError, timeAgo } from '@/lib/constants';
@@ -14,7 +14,7 @@ export function ApprovalScreen({ onOpenComplaint }) {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await localData
       .from('work_orders')
       .select('*, profiles!work_orders_technician_id_fkey(*), complaints(*, complaint_categories(*), buildings(*), profiles!complaints_user_id_fkey(*))')
       .order('created_at', { ascending: false });
@@ -27,7 +27,7 @@ export function ApprovalScreen({ onOpenComplaint }) {
   const decide = async (wo, approved) => {
     setBusy(wo.id);
     const note = approved ? 'Work verified and approved by admin.' : 'Work rejected. Please fix the issue and submit again.';
-    await supabase.from('work_orders').update({
+    await localData.from('work_orders').update({
       approval_status: approved ? 'approved' : 'rejected',
       approval_remarks: note,
       approved_by: profile?.id,
@@ -38,13 +38,13 @@ export function ApprovalScreen({ onOpenComplaint }) {
     const complaint = wo.complaints;
     if (complaint) {
       const completedAt = new Date().toISOString();
-      await supabase.from('complaints').update({
+      await localData.from('complaints').update({
         status: approved ? 'closed' : 'in_progress',
         closed_at: approved ? completedAt : complaint.closed_at,
         resolved_at: approved ? completedAt : complaint.resolved_at,
         updated_at: completedAt,
       }).eq('id', complaint.id);
-      await supabase.from('complaint_status_history').insert({
+      await localData.from('complaint_status_history').insert({
         complaint_id: complaint.id,
         old_status: 'waiting_approval',
         new_status: approved ? 'closed' : 'in_progress',
@@ -53,10 +53,10 @@ export function ApprovalScreen({ onOpenComplaint }) {
         remarks: note,
       });
       if (approved) {
-        const existing = await supabase.from('notifications')
+        const existing = await localData.from('notifications')
           .select('*').eq('user_id', complaint.user_id).eq('related_id', complaint.id).eq('type', 'work_completed').maybeSingle();
         if (!existing.data) {
-          await supabase.from('notifications').insert({
+          await localData.from('notifications').insert({
             user_id: complaint.user_id,
             title: 'Work Completed',
             message: `${complaint.title} has been completed and approved.`,
@@ -67,7 +67,7 @@ export function ApprovalScreen({ onOpenComplaint }) {
         }
       }
       if (wo.technician_id) {
-        await supabase.from('notifications').insert({
+        await localData.from('notifications').insert({
           user_id: wo.technician_id,
           title: approved ? 'Work Approved' : 'Rework Required',
           message: `${complaint.title} — ${note}`,

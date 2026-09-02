@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, timeAgo } from '@/lib/constants';
@@ -48,7 +48,7 @@ export function ProfileScreen({ onNavigate }) {
         localStorage.setItem('cmms_dark_mode', String(darkMode));
     }, [darkMode]);
     const loadComplaints = async () => {
-        let query = supabase
+        let query = localData
             .from('complaints')
             .select('*, complaint_categories(*)')
             .order('created_at', { ascending: false });
@@ -88,7 +88,7 @@ export function ProfileScreen({ onNavigate }) {
                 phone: form.phone,
                 updated_at: new Date().toISOString(),
             };
-            const { error } = await supabase.from('profiles').update(profileUpdates).eq('id', profile?.id);
+            const { error } = await localData.from('profiles').update(profileUpdates).eq('id', profile?.id);
             if (error)
                 throw error;
             await refreshProfile();

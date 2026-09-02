@@ -3,7 +3,7 @@ services:
     name: campusfix-app
     runtime: node
     plan: free
-    autoDeploy: true
+    autoDeployTrigger: commit
     buildCommand: npm install --include=dev --no-audit --no-fund && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
@@ -18,6 +18,8 @@ services:
         value: 7d
       - key: MONGODB_URI
         sync: false
+      - key: MONGODB_DB
+        value: ccmms
       - key: FIREBASE_API_KEY
         sync: false
       - key: ADMIN_EMAIL

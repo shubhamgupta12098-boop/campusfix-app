@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import dns from 'node:dns';
 import { randomUUID } from 'node:crypto';
 import { config } from './config.mjs';
 
@@ -15,17 +16,147 @@ const ALLOWED_COLLECTIONS = [
   'complaint_status_history',
 ];
 
-export async function connectDatabase() {
+function validateMongoUri(uri) {
+  if (!uri) {
+    throw new Error(
+      'MONGODB_URI is missing. Create a root .env file locally or add MONGODB_URI in Render Environment.',
+    );
+  }
+
+  if (!/^mongodb(?:\+srv)?:\/\//i.test(uri)) {
+    throw new Error('MONGODB_URI is not a valid MongoDB connection string.');
+  }
+
+  if (
+    uri.includes('<db_password>') ||
+    uri.includes('YOUR_PASSWORD') ||
+    uri.includes('DB_PASSWORD') ||
+    uri.includes('YOUR_CLUSTER')
+  ) {
+    throw new Error(
+      'MONGODB_URI still contains placeholder values. Copy the real Drivers connection string from MongoDB Atlas.',
+    );
+  }
+}
+
+function isSrvDnsError(error) {
+  const message = String(error?.message || error || '');
+  return /querySrv|ENOTFOUND|ECONNREFUSED|ETIMEOUT|EAI_AGAIN/i.test(message);
+}
+
+function printMongoHelp(error) {
+  const message = String(error?.message || error || '');
+
+  if (isSrvDnsError(error)) {
+    console.error(
+      '[MongoDB] DNS/SRV lookup failed. The app already retried with Google/Cloudflare DNS. Check VPN/proxy/firewall or use Atlas standard connection string if your network blocks SRV.',
+    );
+    return;
+  }
+
+  if (/bad auth|Authentication failed|auth failed|code 18/i.test(message)) {
+    console.error(
+      '[MongoDB] Authentication failed. Check MongoDB Atlas > Database Access username/password and URL-encode special password characters.',
+    );
+    return;
+  }
+
+  if (/IP.*access|not authorized|whitelist|network access/i.test(message)) {
+    console.error(
+      '[MongoDB] Network access rejected. Add your IP in MongoDB Atlas > Network Access. For Render, allow the Render egress range or use 0.0.0.0/0 while testing.',
+    );
+    return;
+  }
+
+  if (/ENETUNREACH|ECONNRESET|ETIMEDOUT|connection/i.test(message)) {
+    console.error(
+      '[MongoDB] Network connection failed. Check internet access, Atlas cluster status, firewall/VPN and Network Access rules.',
+    );
+  }
+}
+
+/**
+ * MongoDB connector based on the working connection pattern from
+ * CampusFix-Before-Photo-Fixed:
+ * 1) validate Atlas URI
+ * 2) prefer IPv4
+ * 3) try normal system DNS
+ * 4) on SRV/DNS failure retry with Google + Cloudflare DNS
+ * 5) ping the selected database before the API starts
+ */
+export async function connectMongoConnection() {
+  validateMongoUri(config.mongoUri);
+
   mongoose.set('strictQuery', true);
-  await mongoose.connect(config.mongoUri, {
+  dns.setDefaultResultOrder('ipv4first');
+
+  const options = {
     autoIndex: true,
     serverSelectionTimeoutMS: 15000,
-  });
+    connectTimeoutMS: 15000,
+    socketTimeoutMS: 45000,
+    family: 4,
+    dbName: config.mongoDbName,
+  };
+
+  try {
+    await mongoose.connect(config.mongoUri, options);
+  } catch (firstError) {
+    const canRetryWithPublicDns =
+      config.mongoUri.startsWith('mongodb+srv://') && isSrvDnsError(firstError);
+
+    if (!canRetryWithPublicDns) {
+      printMongoHelp(firstError);
+      throw firstError;
+    }
+
+    console.warn(
+      '[MongoDB] SRV DNS lookup failed. Retrying with Google DNS (8.8.8.8) and Cloudflare DNS (1.1.1.1)...',
+    );
+
+    try {
+      dns.setServers(['8.8.8.8', '1.1.1.1']);
+    } catch (dnsError) {
+      console.warn('[MongoDB] Could not override DNS servers:', dnsError?.message || dnsError);
+    }
+
+    await mongoose.disconnect().catch(() => {});
+
+    try {
+      await mongoose.connect(config.mongoUri, options);
+    } catch (secondError) {
+      printMongoHelp(secondError);
+      throw secondError;
+    }
+  }
+
+  if (!mongoose.connection.db) {
+    throw new Error('MongoDB connected without a selected database.');
+  }
+
+  await mongoose.connection.db.admin().ping();
+
+  console.log(
+    `[MongoDB] Connected successfully: ${mongoose.connection.host}/${mongoose.connection.name}`,
+  );
+
+  return mongoose.connection;
+}
+
+export async function disconnectDatabase() {
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+}
+
+export async function connectDatabase() {
+  await connectMongoConnection();
 
   for (const name of ALLOWED_COLLECTIONS) {
     const collection = dbCollection(name);
     await collection.createIndex({ id: 1 }, { unique: true, sparse: true });
   }
+
   await dbCollection('auth_users').createIndex({ email: 1 }, { unique: true });
   await dbCollection('profiles').createIndex({ email: 1 }, { unique: true });
   await dbCollection('complaints').createIndex({ user_id: 1, created_at: -1 });
@@ -117,6 +248,7 @@ export async function seedDatabase() {
         profile_id: user.id,
         email: user.email,
         password_hash: await bcrypt.hash(user.password, 12),
+        firebase_recovery_enabled: false,
         created_at: now,
         updated_at: now,
       });
@@ -166,6 +298,7 @@ export async function seedBootstrapAdmin() {
   await authCollection.insertOne({
     id, profile_id: id, email: profile.email,
     password_hash: await bcrypt.hash(config.bootstrapAdminPassword, 12),
+    firebase_recovery_enabled: false,
     created_at: now, updated_at: now,
   });
   console.log(`Bootstrap admin created: ${profile.email}`);

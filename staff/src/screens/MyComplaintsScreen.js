@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '@/components/ui';
 import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
@@ -20,7 +20,7 @@ export function MyComplaintsScreen({ onOpenComplaint }) {
             return;
         setLoading(true);
         setLoadError(null);
-        const { data, error } = await supabase
+        const { data, error } = await localData
             .from('complaints')
             .select('*, complaint_categories(*), buildings(*)')
             .eq('user_id', profile.id)

@@ -1,7 +1,7 @@
 {
   "name": "campusfix-admin-portal",
   "private": true,
-  "version": "1.0.0-local",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "^6.2.2",
-    "@capacitor/cli": "^6.2.2",
-    "@capacitor/core": "^6.2.2",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -23,5 +20,6 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.4.2"
-  }
+  },
+  "description": "CCMMS mobile-first portal using the Render/Express/MongoDB API"
 }

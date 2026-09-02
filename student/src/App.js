@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/auth';
-import { AuthScreen } from '@/screens/AuthScreen';
 import { AppShell } from '@/components/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 function App() {
@@ -10,6 +9,11 @@ function App() {
         document.documentElement.classList.add('antialiased');
         document.documentElement.classList.toggle('dark', localStorage.getItem('cmms_dark_mode') === 'true');
     }, []);
+    useEffect(() => {
+        if (!loading && (!session || !profile)) {
+            window.location.replace('/');
+        }
+    }, [loading, session, profile]);
     if (loading) {
         return (<div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
@@ -19,9 +23,9 @@ function App() {
       </div>);
     }
     if (!session || !profile) {
-        return (<ErrorBoundary>
-        <AuthScreen />
-      </ErrorBoundary>);
+        return (<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-300">
+        <p className="text-sm font-medium">Opening secure sign in…</p>
+      </div>);
     }
     return (<ErrorBoundary>
       <AppShell />

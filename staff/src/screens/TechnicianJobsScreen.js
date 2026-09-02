@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner } from '@/components/ui';
@@ -56,7 +56,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
         }
         setLoading(true);
         setWorkError('');
-        const { data, error } = await supabase
+        const { data, error } = await localData
             .from('complaints')
             .select('*, complaint_categories(*), buildings(*)')
             .eq('assigned_to', profile.id)
@@ -90,7 +90,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
         setLoadingWorkOrder(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-        const { data } = await supabase
+        const { data } = await localData
             .from('work_orders')
             .select('*')
             .eq('complaint_id', complaint.id)
@@ -146,10 +146,10 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
             const updates = { status: 'in_progress', updated_at: startedAt };
             if (!startModal.assigned_at) updates.assigned_at = startedAt;
 
-            const complaintUpdate = await supabase.from('complaints').update(updates).eq('id', startModal.id);
+            const complaintUpdate = await localData.from('complaints').update(updates).eq('id', startModal.id);
             if (complaintUpdate.error) throw new Error(complaintUpdate.error.message);
 
-            const workOrderResult = await supabase.from('work_orders').insert({
+            const workOrderResult = await localData.from('work_orders').insert({
                 complaint_id: startModal.id,
                 technician_id: profile?.id,
                 work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -165,7 +165,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
             }).select('id').single();
             if (workOrderResult.error) throw new Error(workOrderResult.error.message);
 
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: startModal.id,
                 old_status: startModal.status,
                 new_status: 'in_progress',
@@ -204,14 +204,14 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
         setWorkError('');
         try {
             const completedAt = new Date().toISOString();
-            const complaintUpdate = await supabase.from('complaints').update({
+            const complaintUpdate = await localData.from('complaints').update({
                 status: 'waiting_approval',
                 updated_at: completedAt,
             }).eq('id', workModal.id);
             if (complaintUpdate.error) throw new Error(complaintUpdate.error.message);
 
             if (activeWorkOrderId) {
-                const result = await supabase.from('work_orders').update({
+                const result = await localData.from('work_orders').update({
                     repair_notes: repairNotes.trim(),
                     before_photo_urls: beforePhotos,
                     completion_photo_urls: completionPhotos,
@@ -221,7 +221,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
                 }).eq('id', activeWorkOrderId);
                 if (result.error) throw new Error(result.error.message);
             } else {
-                const result = await supabase.from('work_orders').insert({
+                const result = await localData.from('work_orders').insert({
                     complaint_id: workModal.id,
                     technician_id: profile?.id,
                     work_order_no: `WO-${Date.now().toString().slice(-8)}`,
@@ -240,7 +240,7 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
                 if (result.error) throw new Error(result.error.message);
             }
 
-            await supabase.from('complaint_status_history').insert({
+            await localData.from('complaint_status_history').insert({
                 complaint_id: workModal.id,
                 old_status: workModal.status,
                 new_status: 'waiting_approval',
@@ -248,8 +248,8 @@ export function TechnicianJobsScreen({ onOpenComplaint, onNavigate }) {
                 remarks: repairNotes.trim(),
             });
 
-            const admins = await supabase.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
-            await Promise.all((admins.data || []).map((admin) => supabase.from('notifications').insert({
+            const admins = await localData.from('profiles').select('*').eq('role', 'admin').eq('is_active', true);
+            await Promise.all((admins.data || []).map((admin) => localData.from('notifications').insert({
                 user_id: admin.id,
                 title: 'Work Approval Required',
                 message: `${workModal.title} has been completed by ${profile?.full_name || 'staff'} and is ready for approval.`,

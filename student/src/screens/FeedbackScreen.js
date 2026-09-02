@@ -12,7 +12,7 @@ import {
     Wifi,
     Wrench,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Card, EmptyState, Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
@@ -37,7 +37,7 @@ export function FeedbackScreen({ onOpenComplaint, onBack }) {
     const load = async () => {
         setLoading(true);
         setError('');
-        let query = supabase
+        let query = localData
             .from('complaints')
             .select('*, complaint_categories(*), profiles!complaints_user_id_fkey(*), profiles!complaints_assigned_to_fkey(*)')
             .order('updated_at', { ascending: false });

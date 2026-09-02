@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { uploadDataUrl } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 import { PageHeader, Card } from '@/components/ui';
@@ -167,7 +167,7 @@ export function RaiseComplaintScreen({ onDone }) {
             return;
         }
         const videoUrls = uploadedMedia.filter((item) => item.kind === 'video').map((item) => item.url);
-        const result = await supabase.from('complaints').insert({
+        const result = await localData.from('complaints').insert({
             complaint_no: complaintNo,
             title: title.trim(),
             description: description.trim(),
@@ -193,7 +193,7 @@ export function RaiseComplaintScreen({ onDone }) {
         }
 
         const complaintId = result.data.id;
-        await supabase.from('complaint_status_history').insert({
+        await localData.from('complaint_status_history').insert({
             complaint_id: complaintId,
             old_status: null,
             new_status: 'submitted',
@@ -204,9 +204,9 @@ export function RaiseComplaintScreen({ onDone }) {
         // A new complaint is visible to ADMIN only. Staff must not receive any
         // alert until an admin has reviewed the complaint as genuine and assigns it.
         try {
-            const admins = await supabase.from('profiles').select('id').eq('role', 'admin').eq('is_active', true);
+            const admins = await localData.from('profiles').select('id').eq('role', 'admin').eq('is_active', true);
             if (admins.data && admins.data.length) {
-                await supabase.from('notifications').insert(admins.data.map((account) => ({
+                await localData.from('notifications').insert(admins.data.map((account) => ({
                     user_id: account.id,
                     title: 'New Complaint Submitted',
                     message: `${complaintNo}: ${title.trim()} — ${selectedCat.name}`,

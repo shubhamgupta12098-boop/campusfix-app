@@ -151,6 +151,19 @@ dataRouter.put('/:store/:id', async (req, res, next) => {
     if (!(await mayWrite(store, row, req.auth, existing))) return res.status(403).json({ error: 'You do not have permission to change this record.' });
     await validateRow(store, row, existing);
     await dbCollection(store).replaceOne({ id }, row, { upsert: true });
+    // When Admin promotes/creates a Staff profile, keep the technician record in sync.
+    if (store === 'profiles' && row.role === 'staff') {
+      const now = new Date().toISOString();
+      await dbCollection('technicians').updateOne(
+        { id: row.id },
+        { $setOnInsert: {
+          id: row.id,
+          employee_code: row.college_id || `STF-${Date.now().toString().slice(-6)}`,
+          skills: [], current_workload: 0, availability_status: 'available', area_coverage: [], created_at: now,
+        }, $set: { updated_at: now } },
+        { upsert: true },
+      );
+    }
     res.json(cleanDoc(row));
   } catch (error) { next(error); }
 });

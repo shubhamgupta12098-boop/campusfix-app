@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner, EmptyState } from '@/components/ui';
 import { PRIORITY_CONFIG, formatDate } from '@/lib/constants';
@@ -25,8 +25,8 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
     setError('');
     try {
       const [c, t] = await Promise.all([
-        supabase.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
+        localData.from('complaints').select('*, complaint_categories(*), buildings(*), profiles!complaints_assigned_to_fkey(*)').in('status', ['submitted', 'verified', 'assigned']).order('created_at', { ascending: false }),
+        localData.from('profiles').select('*, technicians(*)').eq('role', 'staff').eq('is_active', true),
       ]);
       if (c.error) throw new Error(c.error.message);
       if (t.error) throw new Error(t.error.message);
@@ -51,17 +51,17 @@ export function AssignComplaintsScreen({ onOpenComplaint }) {
     setError('');
     try {
       const chosenStaff = technicians.find((t) => t.id === selectedTech);
-      const result = await supabase.from('complaints').update({
+      const result = await localData.from('complaints').update({
         status: 'assigned', assigned_to: selectedTech, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }).eq('id', assignModal.id);
       if (result.error) throw new Error(result.error.message);
-      await supabase.from('complaint_status_history').insert({
+      await localData.from('complaint_status_history').insert({
         complaint_id: assignModal.id, old_status: assignModal.status, new_status: 'assigned', changed_by: profile?.id, remarks: `Assigned to ${chosenStaff?.full_name || 'staff'}`,
       });
-      await supabase.from('notifications').insert({
+      await localData.from('notifications').insert({
         user_id: selectedTech, title: 'New Complaint Assigned', message: assignModal.title, type: 'assigned', related_id: assignModal.id, is_read: false,
       });
-      await supabase.from('technicians').update({ current_workload: (chosenStaff?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
+      await localData.from('technicians').update({ current_workload: (chosenStaff?.technician?.current_workload || 0) + 1 }).eq('id', selectedTech);
       setAssignModal(null);
       setSelectedTech('');
       await load();
