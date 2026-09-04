@@ -2,22 +2,25 @@ package com.ccmms.campusfix;
 
 import android.app.Activity;
 import android.app.DownloadManager;
-import android.content.Context;
+import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.Uri;
+import android.os.CancellationSignal;
+import android.os.ParcelFileDescriptor;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintDocumentInfo;
+import android.print.PageRange;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
-import android.webkit.DownloadListener;
-import android.webkit.JsResult;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -34,8 +37,17 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4102;
+    private static final String TRUSTED_HOST = "campusfix-app-x04t.onrender.com";
+    private static final long MAX_NATIVE_DOWNLOAD_BYTES = 15L * 1024L * 1024L;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -97,11 +109,14 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " CCMMS-Android/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " CCMMS-Android/1.1");
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
+
+        // Native bridge used by report CSV/PDF export inside the APK.
+        webView.addJavascriptInterface(new CampusFixAndroidBridge(), "CampusFixAndroid");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -109,7 +124,8 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
                 if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-                    return false;
+                    if (isTrustedUri(uri)) return false;
+                    return openExternal(uri);
                 }
                 return openExternal(uri);
             }
@@ -119,6 +135,9 @@ public class MainActivity extends Activity {
                 progressBar.setVisibility(View.GONE);
                 errorView.setVisibility(View.GONE);
                 CookieManager.getInstance().flush();
+                if (isTrustedUri(Uri.parse(url))) {
+                    installNativeExportHooks(view);
+                }
                 super.onPageFinished(view, url);
             }
 
@@ -173,6 +192,12 @@ public class MainActivity extends Activity {
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            if (url == null) return;
+            // blob: is handled by the injected native share hook / JS bridge.
+            if (url.startsWith("blob:") || url.startsWith("data:")) {
+                Toast.makeText(this, "Preparing download…", Toast.LENGTH_SHORT).show();
+                return;
+            }
             try {
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
                 request.setMimeType(mimeType);
@@ -180,7 +205,8 @@ public class MainActivity extends Activity {
                 String cookie = CookieManager.getInstance().getCookie(url);
                 if (cookie != null) request.addRequestHeader("Cookie", cookie);
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "ccmms-download");
+                String fileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
                 DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 manager.enqueue(request);
                 Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
@@ -188,6 +214,281 @@ public class MainActivity extends Activity {
                 openExternal(Uri.parse(url));
             }
         });
+    }
+
+    /**
+     * Backward-compatible support for the currently deployed web app.
+     * It catches <a download href="blob:..."> and window.print() even before
+     * the updated React build is deployed.
+     */
+    private void installNativeExportHooks(WebView view) {
+        String js = "(function(){" +
+                "if(window.__campusfixNativeExportInstalled)return;" +
+                "window.__campusfixNativeExportInstalled=true;" +
+                "var blobs=new Map();" +
+                "var create=URL.createObjectURL.bind(URL);" +
+                "var revoke=URL.revokeObjectURL.bind(URL);" +
+                "URL.createObjectURL=function(o){var u=create(o);try{blobs.set(u,o);}catch(e){}return u;};" +
+                "URL.revokeObjectURL=function(u){setTimeout(function(){try{blobs.delete(u);revoke(u);}catch(e){}},3000);};" +
+                "document.addEventListener('click',function(e){" +
+                "var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;" +
+                "if(!a||!a.href||!window.CampusFixAndroid)return;" +
+                "var b=blobs.get(a.href);if(!b)return;" +
+                "e.preventDefault();e.stopImmediatePropagation();" +
+                "var r=new FileReader();r.onloadend=function(){" +
+                "var s=String(r.result||'');var i=s.indexOf(',');" +
+                "try{var fn=CampusFixAndroid.shareBase64||CampusFixAndroid.saveBase64;if(fn){fn.call(CampusFixAndroid,a.download||'campusfix-download',b.type||'application/octet-stream',i>=0?s.slice(i+1):'');}}" +
+                "catch(x){console.error(x);}};r.readAsDataURL(b);" +
+                "},true);" +
+                "var oldPrint=window.print;window.print=function(){" +
+                "try{if(window.CampusFixAndroid){if(CampusFixAndroid.sharePageAsPdf){CampusFixAndroid.sharePageAsPdf();return;}if(CampusFixAndroid.printPage){CampusFixAndroid.printPage();return;}}}catch(e){}" +
+                "if(oldPrint)return oldPrint.call(window);};" +
+                "})();";
+        view.evaluateJavascript(js, null);
+    }
+
+    private boolean isTrustedUri(Uri uri) {
+        if (uri == null) return false;
+        String host = uri.getHost();
+        return host != null && (host.equalsIgnoreCase(TRUSTED_HOST) || host.endsWith("." + TRUSTED_HOST));
+    }
+
+    private class CampusFixAndroidBridge {
+        /**
+         * New APK behavior: export opens Android's share sheet instead of
+         * silently saving a copy in Downloads.
+         */
+        @JavascriptInterface
+        public void shareBase64(String filename, String mimeType, String base64Data) {
+            if (base64Data == null || base64Data.isEmpty()) {
+                showToast("Export file empty hai");
+                return;
+            }
+
+            String safeMime = normalizeAllowedMime(mimeType);
+            if (safeMime == null) {
+                showToast("Unsupported export type");
+                return;
+            }
+
+            byte[] bytes;
+            try {
+                bytes = Base64.decode(base64Data, Base64.DEFAULT);
+            } catch (Exception ex) {
+                showToast("Export decode nahi hua");
+                return;
+            }
+
+            if (bytes.length > MAX_NATIVE_DOWNLOAD_BYTES) {
+                showToast("Export file bahut badi hai");
+                return;
+            }
+
+            try {
+                String safeName = sanitizeFilename(filename, safeMime);
+                File target = writeExportToCache(safeName, bytes);
+                shareCachedFile(target, safeMime);
+            } catch (Exception ex) {
+                showToast("Export share nahi hua: " + ex.getMessage());
+            }
+        }
+
+        /** Backward compatibility with an already-deployed web build. */
+        @JavascriptInterface
+        public void saveBase64(String filename, String mimeType, String base64Data) {
+            shareBase64(filename, mimeType, base64Data);
+        }
+
+        /** New direct PDF share API. */
+        @JavascriptInterface
+        public void sharePageAsPdf() {
+            runOnUiThread(() -> createAndSharePdf());
+        }
+
+        /** Backward compatibility: old frontend calls printPage(). */
+        @JavascriptInterface
+        public void printPage() {
+            runOnUiThread(() -> createAndSharePdf());
+        }
+    }
+
+    private String normalizeAllowedMime(String mimeType) {
+        String value = mimeType == null ? "" : mimeType.toLowerCase(Locale.US).split(";", 2)[0].trim();
+        if (value.equals("text/csv") || value.equals("application/csv") || value.equals("text/plain")) {
+            return "text/csv";
+        }
+        if (value.equals("application/pdf")) {
+            return "application/pdf";
+        }
+        return null;
+    }
+
+    private String sanitizeFilename(String filename, String mimeType) {
+        String fallback = mimeType.equals("application/pdf") ? "campusfix-report.pdf" : "campusfix-report.csv";
+        String name = filename == null || filename.trim().isEmpty() ? fallback : filename.trim();
+        name = name.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
+        if (name.length() > 100) name = name.substring(0, 100);
+        if (mimeType.equals("text/csv") && !name.toLowerCase(Locale.US).endsWith(".csv")) name += ".csv";
+        if (mimeType.equals("application/pdf") && !name.toLowerCase(Locale.US).endsWith(".pdf")) name += ".pdf";
+        return name;
+    }
+
+    private File getExportCacheDir() throws IOException {
+        File dir = new File(getCacheDir(), "exports");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Temporary export folder create nahi hua");
+        }
+        // Keep cache tidy. Anything older than one day can be removed safely.
+        File[] oldFiles = dir.listFiles();
+        if (oldFiles != null) {
+            long cutoff = System.currentTimeMillis() - (24L * 60L * 60L * 1000L);
+            for (File old : oldFiles) {
+                if (old.isFile() && old.lastModified() < cutoff) old.delete();
+            }
+        }
+        return dir;
+    }
+
+    private File writeExportToCache(String filename, byte[] bytes) throws IOException {
+        File target = uniqueFile(getExportCacheDir(), filename);
+        try (FileOutputStream out = new FileOutputStream(target)) {
+            out.write(bytes);
+            out.flush();
+        }
+        return target;
+    }
+
+    private void shareCachedFile(File file, String mimeType) {
+        runOnUiThread(() -> {
+            try {
+                Uri uri = new Uri.Builder()
+                        .scheme("content")
+                        .authority(getPackageName() + ".exports")
+                        .appendPath(file.getName())
+                        .build();
+
+                Intent share = new Intent(Intent.ACTION_SEND);
+                share.setType(mimeType);
+                share.putExtra(Intent.EXTRA_STREAM, uri);
+                share.putExtra(Intent.EXTRA_SUBJECT, file.getName());
+                share.setClipData(ClipData.newUri(getContentResolver(), file.getName(), uri));
+                share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+                Intent chooser = Intent.createChooser(share, "Share " + file.getName());
+                startActivity(chooser);
+            } catch (Exception ex) {
+                Toast.makeText(MainActivity.this, "Share menu open nahi hua", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Render the current WebView into a temporary PDF and then open Android's
+     * standard share chooser. No permanent Downloads copy is created first.
+     */
+    private void createAndSharePdf() {
+        if (webView == null) return;
+        try {
+            String stamp = new SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US).format(new Date());
+            String jobName = "CampusFix-report-" + stamp;
+            File pdf = uniqueFile(getExportCacheDir(), jobName + ".pdf");
+            ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(
+                    pdf,
+                    ParcelFileDescriptor.MODE_CREATE |
+                            ParcelFileDescriptor.MODE_TRUNCATE |
+                            ParcelFileDescriptor.MODE_READ_WRITE);
+
+            PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter(jobName);
+            PrintAttributes attributes = new PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                    .setMinMargins(new PrintAttributes.Margins(0, 0, 0, 0))
+                    .build();
+            CancellationSignal cancellationSignal = new CancellationSignal();
+
+            Toast.makeText(this, "Preparing PDF…", Toast.LENGTH_SHORT).show();
+
+            adapter.onLayout(
+                    null,
+                    attributes,
+                    cancellationSignal,
+                    new PrintDocumentAdapter.LayoutResultCallback() {
+                        @Override
+                        public void onLayoutFinished(PrintDocumentInfo info, boolean changed) {
+                            adapter.onWrite(
+                                    new PageRange[]{PageRange.ALL_PAGES},
+                                    descriptor,
+                                    cancellationSignal,
+                                    new PrintDocumentAdapter.WriteResultCallback() {
+                                        @Override
+                                        public void onWriteFinished(PageRange[] pages) {
+                                            closeQuietly(descriptor);
+                                            adapter.onFinish();
+                                            if (pdf.exists() && pdf.length() > 0) {
+                                                shareCachedFile(pdf, "application/pdf");
+                                            } else {
+                                                showToast("PDF create nahi hui");
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onWriteFailed(CharSequence error) {
+                                            closeQuietly(descriptor);
+                                            adapter.onFinish();
+                                            showToast("PDF export failed");
+                                        }
+
+                                        @Override
+                                        public void onWriteCancelled() {
+                                            closeQuietly(descriptor);
+                                            adapter.onFinish();
+                                        }
+                                    });
+                        }
+
+                        @Override
+                        public void onLayoutFailed(CharSequence error) {
+                            closeQuietly(descriptor);
+                            adapter.onFinish();
+                            showToast("PDF layout failed");
+                        }
+
+                        @Override
+                        public void onLayoutCancelled() {
+                            closeQuietly(descriptor);
+                            adapter.onFinish();
+                        }
+                    },
+                    null);
+        } catch (Exception ex) {
+            Toast.makeText(this, "PDF share open nahi hua: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void closeQuietly(ParcelFileDescriptor descriptor) {
+        if (descriptor == null) return;
+        try {
+            descriptor.close();
+        } catch (IOException ignored) {
+        }
+    }
+
+    private File uniqueFile(File folder, String filename) {
+        File target = new File(folder, filename);
+        if (!target.exists()) return target;
+        int dot = filename.lastIndexOf('.');
+        String base = dot > 0 ? filename.substring(0, dot) : filename;
+        String ext = dot > 0 ? filename.substring(dot) : "";
+        int index = 1;
+        while (target.exists()) {
+            target = new File(folder, base + "-" + index + ext);
+            index++;
+        }
+        return target;
+    }
+
+    private void showToast(String message) {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show());
     }
 
     private LinearLayout buildErrorView() {

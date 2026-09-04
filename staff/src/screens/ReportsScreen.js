@@ -3,7 +3,7 @@ import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
-import { downloadTextFile } from '@/lib/download';
+import { downloadTextFile, exportPageAsPdf } from '@/lib/download';
 import {
   CalendarDays,
   CheckCircle2,
@@ -357,7 +357,7 @@ export function ReportsScreen({ onNavigate }) {
           <p className="admin-report-note"><Info size={16}/>Reports export using the data in the selected range.</p>
         </section>
 
-        <div className="admin-report-export-all"><strong><FileText size={20}/>Export All Reports</strong><button type="button" onClick={() => window.print()}><FileText size={19}/>Export as PDF</button><button type="button" onClick={exportCSV} disabled={exporting}><FileSpreadsheet size={19}/>{exporting ? 'Exporting…' : 'Export as CSV'}</button></div>
+        <div className="admin-report-export-all"><strong><FileText size={20}/>Export All Reports</strong><button type="button" onClick={exportPageAsPdf}><FileText size={19}/>Export as PDF</button><button type="button" onClick={exportCSV} disabled={exporting}><FileSpreadsheet size={19}/>{exporting ? 'Exporting…' : 'Export as CSV'}</button></div>
       </div>
     );
   }
