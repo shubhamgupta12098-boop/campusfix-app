@@ -1,6 +1,32 @@
 import { create } from 'zustand';
-import { api, setToken, getToken } from '@/lib/api';
+import { api, setToken, getToken, AUTH_CACHE_KEY } from '@/lib/api';
 const message = (e) => e instanceof Error ? e.message : String(e);
+
+function readCachedAuth() {
+    try {
+        const raw = localStorage.getItem(AUTH_CACHE_KEY);
+        const cached = raw ? JSON.parse(raw) : null;
+        return cached?.user && cached?.profile ? cached : null;
+    } catch { return null; }
+}
+function persistAuth(user, profile) {
+    if (!user || !profile) return;
+    try { localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({ user, profile, savedAt: Date.now() })); } catch {}
+}
+function fallbackAuthFromToken(token) {
+    try {
+        const middle = String(token || '').split('.')[1];
+        if (!middle) return null;
+        const normalized = middle.replace(/-/g, '+').replace(/_/g, '/');
+        const claims = JSON.parse(decodeURIComponent(escape(atob(normalized))));
+        if (!claims?.sub || !claims?.role) return null;
+        const email = String(claims.email || '');
+        const name = email ? email.split('@')[0] : 'CCMMS User';
+        const user = { uid: String(claims.sub), email, displayName: name, role: String(claims.role) };
+        const profile = { id: String(claims.sub), email, full_name: name, role: String(claims.role), is_active: true };
+        return { user, profile, savedAt: Date.now() };
+    } catch { return null; }
+}
 export const useAuthStore = create((set, get) => ({
     session: null, user: null, profile: null, loading: true, error: null,
     signIn: async (email, password) => {
@@ -10,6 +36,7 @@ export const useAuthStore = create((set, get) => ({
                 method: 'POST', body: JSON.stringify({ email, password }),
             });
             setToken(r.token || null);
+            persistAuth(r.user, r.profile);
             set({ session: { user: r.user }, user: r.user, profile: r.profile, loading: false });
             return { error: null };
         }
@@ -27,6 +54,7 @@ export const useAuthStore = create((set, get) => ({
                 method: 'POST', body: JSON.stringify({ ...rest, email, password, fullName, college_id: collegeId }),
             });
             setToken(r.token || null);
+            persistAuth(r.user, r.profile);
             set({ session: { user: r.user }, user: r.user, profile: r.profile, loading: false });
             return { error: null };
         }
@@ -55,6 +83,7 @@ export const useAuthStore = create((set, get) => ({
             });
             const user = get().user ? { ...get().user, email: r.email } : null;
             const profile = get().profile ? { ...get().profile, email: r.email } : null;
+            persistAuth(user, profile);
             set({ user, profile, session: user ? { user } : null });
             return { error: null };
         }
@@ -78,7 +107,7 @@ export const useAuthStore = create((set, get) => ({
         try { await api('/auth/logout', { method: 'POST' }); } catch {}
         setToken(null);
         try {
-            ['student', 'admin', 'staff'].forEach((role) => localStorage.removeItem(`campusfix_${role}_session_token`));
+            ['student', 'admin', 'staff'].forEach((role) => { localStorage.removeItem(`campusfix_${role}_session_token`); localStorage.removeItem(`campusfix_${role}_auth_cache`); });
             sessionStorage.removeItem('ccmms_login_handoff');
         } catch {}
         set({ session: null, user: null, profile: null });
@@ -86,26 +115,42 @@ export const useAuthStore = create((set, get) => ({
     refreshProfile: async () => {
         try {
             const r = await api('/auth/me');
+            persistAuth(r.user, r.profile);
             set({ user: r.user, profile: r.profile, session: { user: r.user } });
+            return { error: null };
         }
-        catch {
-            setToken(null);
-            set({ user: null, profile: null, session: null });
+        catch (e) {
+            // A network error, Render cold start or temporary API problem must
+            // never sign the user out. Only signOut() clears the saved session.
+            return { error: message(e) };
         }
     },
     clearError: () => set({ error: null }),
 }));
 (async () => {
+    // Persistent-login rule: a saved token remains signed in until the user
+    // explicitly chooses Logout/Sign out. Closing the app, pressing Back,
+    // refreshing, losing internet, or a Render cold start must not clear it.
+    const token = getToken();
+    if (!token) {
+        useAuthStore.setState({ user: null, profile: null, session: null, loading: false });
+        return;
+    }
+
+    const cached = readCachedAuth() || fallbackAuthFromToken(token);
+    if (cached?.user && cached?.profile) {
+        persistAuth(cached.user, cached.profile);
+        useAuthStore.setState({ user: cached.user, profile: cached.profile, session: { user: cached.user }, loading: false });
+    }
+
     try {
-        // getToken() also consumes the short-lived login handoff when present.
-        getToken();
-        // Always ask /me once. The localhost server also accepts its same-origin
-        // HttpOnly session cookie, so a successful login cannot bounce back to /.
         const r = await api('/auth/me');
+        persistAuth(r.user, r.profile);
         useAuthStore.setState({ user: r.user, profile: r.profile, session: { user: r.user }, loading: false });
     }
     catch {
-        setToken(null);
-        useAuthStore.setState({ user: null, profile: null, session: null, loading: false });
+        // Deliberately keep the local token/cache. Explicit signOut() is the
+        // only client action that removes them.
+        if (!cached) useAuthStore.setState({ loading: false });
     }
 })();

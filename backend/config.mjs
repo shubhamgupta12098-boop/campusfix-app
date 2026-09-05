@@ -16,7 +16,8 @@ export const config = {
   mongoUri: String(process.env.MONGODB_URI || '').trim(),
   mongoDbName: String(process.env.MONGODB_DB || 'ccmms').trim() || 'ccmms',
   jwtSecret: String(process.env.JWT_SECRET || 'dev-only-change-this-jwt-secret-before-production'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // 'never' keeps the device signed in until the user explicitly logs out.
+  jwtExpiresIn: String(process.env.JWT_EXPIRES_IN || 'never').trim().toLowerCase(),
   firebaseApiKey: String(process.env.FIREBASE_API_KEY || '').trim(),
   appBaseUrl: configuredBaseUrl || renderUrl || `http://localhost:${port}`,
   corsOrigins: String(process.env.CORS_ORIGINS || '')

@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'campusfix_student_session_token';
+export const AUTH_CACHE_KEY = 'campusfix_student_auth_cache';
 const PORTAL_ROLE = 'student';
 export const LOCAL_MODE = false;
 function apiRoot() {
@@ -26,7 +27,7 @@ async function request(url, init = {}) {
   const response = await fetch(url, { ...init, headers, credentials: 'include', cache: 'no-store' });
   const type = response.headers.get('content-type') || '';
   const payload = type.includes('application/json') ? await response.json().catch(() => ({})) : await response.text();
-  if (!response.ok) throw new Error(typeof payload === 'object' && payload?.error ? payload.error : (String(payload || '') || 'Request failed.'));
+  if (!response.ok) { const error = new Error(typeof payload === 'object' && payload?.error ? payload.error : (String(payload || '') || 'Request failed.')); error.status = response.status; throw error; }
   return payload;
 }
 export async function api(path, init = {}) { return request(apiRoot() + path, init); }

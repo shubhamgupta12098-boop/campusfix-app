@@ -7,7 +7,9 @@ import { firebaseErrorMessage, sendFirebasePasswordReset, verifyFirebasePassword
 
 export const authRouter = express.Router();
 const SESSION_COOKIE = 'ccmms_session';
-const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// The bearer token is stored in persistent localStorage. Keep the companion
+// cookie long-lived too; explicit /logout is the normal way to end a session.
+const SESSION_MAX_AGE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
 function readCookie(req, name) {
   const raw = String(req.get('cookie') || '');
@@ -46,7 +48,11 @@ function portalRole(req) {
 }
 function publicUser(profile) { return { uid: profile.id, email: profile.email, displayName: profile.full_name, role: profile.role }; }
 function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function issueToken(profile) { return jwt.sign({ sub: profile.id, role: profile.role, email: profile.email }, config.jwtSecret, { expiresIn: config.jwtExpiresIn }); }
+function issueToken(profile) {
+  // CCMMS persistent-login mode: do not attach an exp claim. The device keeps
+  // this token in localStorage and only the explicit Logout action removes it.
+  return jwt.sign({ sub: profile.id, role: profile.role, email: profile.email }, config.jwtSecret);
+}
 
 export async function requireAuth(req, res, next) {
   try {
