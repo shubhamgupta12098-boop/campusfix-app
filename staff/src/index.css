@@ -7753,3 +7753,73 @@ select option:hover { background: #159763 !important; color: #ffffff !important;
     padding-right: 9px;
   }
 }
+
+/* Staff bottom navigation — Home / My Work / + / Profile.
+   The + action intentionally uses the same icon scale and footprint as the
+   other navigation items; it opens My Jobs without a floating oversized FAB. */
+.staff-ui .campus-bottom-nav.staff-bottom-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 82px;
+  padding: 0 10px;
+  overflow: hidden;
+}
+
+.staff-ui .staff-bottom-nav .campus-nav-item {
+  min-height: 70px;
+  gap: 6px;
+  color: #aab5c6;
+  font-size: 11px;
+}
+
+.staff-ui .staff-bottom-nav .campus-nav-item svg {
+  width: 27px;
+  height: 27px;
+}
+
+.staff-ui .staff-bottom-nav .campus-nav-item.is-active {
+  color: #2f8fff;
+}
+
+.staff-ui .staff-bottom-nav .staff-center-action {
+  position: relative;
+  z-index: auto;
+  display: flex;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  color: #aab5c6;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.staff-ui .staff-bottom-nav .staff-center-action:hover {
+  color: #2f8fff;
+  filter: none;
+}
+
+.staff-ui .staff-bottom-nav .staff-center-action:active {
+  transform: scale(.96);
+}
+
+@media (max-width: 520px) {
+  .staff-ui .campus-bottom-nav.staff-bottom-nav {
+    min-height: 84px;
+    padding-right: 8px;
+    padding-left: 8px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 360px) {
+  .staff-ui .staff-bottom-nav .campus-nav-item {
+    font-size: 10px;
+  }
+
+  .staff-ui .staff-bottom-nav .campus-nav-item svg {
+    width: 24px;
+    height: 24px;
+  }
+}

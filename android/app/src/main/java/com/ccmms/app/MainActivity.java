@@ -261,11 +261,20 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
+        if (webView == null) {
             super.onBackPressed();
+            return;
         }
+
+        webView.evaluateJavascript(
+                "(function(){try{return window.CCMMS_HANDLE_ANDROID_BACK ? window.CCMMS_HANDLE_ANDROID_BACK() : 'exit';}catch(e){return 'exit';}})()",
+                result -> {
+                    if ("\"handled\"".equals(result)) return;
+                    // Dashboard is the app's root. Close the activity here instead
+                    // of going back to the login page. Session/token stays intact.
+                    finish();
+                }
+        );
     }
 
     private final class AndroidBridge {
@@ -286,16 +295,9 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void shareText(String filename, String mimeType, String content, String title, String text) {
             runOnUiThread(() -> {
-                // Use text/plain for the Android share chooser so the widest set of
-                // installed apps can appear (WhatsApp, Gmail, Messages, Instagram
-                // when that installed version accepts text shares, etc.).
-                Intent shareIntent = new Intent(Intent.ACTION_SEND);
-                shareIntent.setType("text/plain");
-                shareIntent.putExtra(
-                    Intent.EXTRA_SUBJECT,
-                    title == null || title.isEmpty() ? safeFilename(filename) : title
-                );
-
+                String heading = title == null || title.trim().isEmpty()
+                        ? safeFilename(filename)
+                        : title.trim();
                 String intro = text == null ? "" : text.trim();
                 String report = content == null ? "" : content.trim();
                 String shareBody;
@@ -306,11 +308,76 @@ public class MainActivity extends Activity {
                 } else {
                     shareBody = intro + "\n\n" + report;
                 }
-
-                shareIntent.putExtra(Intent.EXTRA_TEXT, shareBody);
-                Intent chooser = Intent.createChooser(shareIntent, "Share CCMMS report via");
-                startActivity(chooser);
+                openShareChooser(heading, shareBody);
             });
+        }
+
+        @JavascriptInterface
+        public void shareToApp(String target, String title, String text) {
+            runOnUiThread(() -> {
+                String heading = title == null || title.trim().isEmpty() ? "CCMMS Report" : title.trim();
+                String body = text == null ? "" : text;
+                if (!openShareTarget(target, heading, body)) {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Selected app is not available. Showing all share apps.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                    openShareChooser(heading, body);
+                }
+            });
+        }
+    }
+
+
+    private Intent makeTextShareIntent(String title, String text) {
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_SUBJECT, title == null ? "CCMMS Report" : title);
+        intent.putExtra(Intent.EXTRA_TEXT, text == null ? "" : text);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT);
+        return intent;
+    }
+
+    private void openShareChooser(String title, String text) {
+        try {
+            Intent chooser = Intent.createChooser(
+                    makeTextShareIntent(title, text),
+                    "Share CCMMS report via"
+            );
+            startActivity(chooser);
+        } catch (Exception e) {
+            Toast.makeText(this, "No compatible sharing app found.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private boolean launchTextSharePackage(String packageName, String title, String text) {
+        try {
+            Intent intent = makeTextShareIntent(title, text);
+            intent.setPackage(packageName);
+            startActivity(intent);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean openShareTarget(String target, String title, String text) {
+        String key = target == null ? "" : target.trim().toLowerCase();
+        switch (key) {
+            case "whatsapp":
+                // Support both regular WhatsApp and WhatsApp Business.
+                return launchTextSharePackage("com.whatsapp", title, text)
+                        || launchTextSharePackage("com.whatsapp.w4b", title, text);
+            case "gmail":
+                return launchTextSharePackage("com.google.android.gm", title, text);
+            case "instagram":
+                return launchTextSharePackage("com.instagram.android", title, text);
+            case "more":
+                openShareChooser(title, text);
+                return true;
+            default:
+                return false;
         }
     }
 

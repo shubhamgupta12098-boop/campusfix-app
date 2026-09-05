@@ -135,6 +135,44 @@ export const AppShell = () => {
     const items = useMemo(() => NAV_ITEMS.filter((item) => item.roles.includes(role)), [role]);
     const bottomNav = BOTTOM_NAV[role] || BOTTOM_NAV.student;
 
+    // Keep in-app navigation in browser/WebView history. This makes Back return
+    // through CCMMS screens to Dashboard first, without signing the user out.
+    useEffect(() => {
+        const currentState = window.history.state;
+        if (!currentState?.ccmmsApp) {
+            window.history.replaceState({ ccmmsApp: true, screen: 'dashboard' }, '', window.location.href);
+        }
+
+        const handlePopState = (event) => {
+            const state = event.state;
+            if (!state?.ccmmsApp) return;
+            setScreen(state.screen || 'dashboard');
+            setSelectedComplaintId(state.complaintId || null);
+            setComplaintReturnScreen(state.complaintReturnScreen || null);
+            setDrawerOpen(false);
+            window.scrollTo({ top: 0, behavior: 'auto' });
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    // Android WebView asks this handler before closing. Nested screens go back
+    // inside the app; once Dashboard is reached, the Android app can close
+    // without clearing the authenticated session.
+    useEffect(() => {
+        window.CCMMS_HANDLE_ANDROID_BACK = () => {
+            if (screen !== 'dashboard') {
+                window.history.back();
+                return 'handled';
+            }
+            return 'exit';
+        };
+        return () => {
+            try { delete window.CCMMS_HANDLE_ANDROID_BACK; } catch {}
+        };
+    }, [screen]);
+
     useEffect(() => {
         let refreshTimer = null;
         const refreshFromSharedData = () => {
@@ -185,13 +223,29 @@ export const AppShell = () => {
         };
     }, [profile?.id, role, screen, sharedDataVersion]);
 
-    const navigate = (nextScreen) => {
+    const navigate = (nextScreen, { replace = false } = {}) => {
+        if (!nextScreen) return;
+        const nextState = { ccmmsApp: true, screen: nextScreen };
+        if (replace) {
+            window.history.replaceState(nextState, '', window.location.href);
+        } else if (screen !== nextScreen) {
+            window.history.pushState(nextState, '', window.location.href);
+        }
         setScreen(nextScreen);
+        setSelectedComplaintId(null);
+        setComplaintReturnScreen(null);
         setDrawerOpen(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const openComplaint = (id, returnScreen = screen) => {
+        const nextState = {
+            ccmmsApp: true,
+            screen: 'complaint-detail',
+            complaintId: id,
+            complaintReturnScreen: returnScreen,
+        };
+        window.history.pushState(nextState, '', window.location.href);
         setSelectedComplaintId(id);
         setComplaintReturnScreen(returnScreen);
         setScreen('complaint-detail');
@@ -349,11 +403,19 @@ export const AppShell = () => {
 
         {role === 'staff' ? (
           <nav className="campus-bottom-nav staff-bottom-nav" aria-label="Staff navigation">
-            {[
-              { id: 'dashboard', label: 'Home', icon: Home },
-              { id: 'technician-jobs', label: 'My Job', icon: Plus, iconVariant: 'circle' },
-              { id: 'profile', label: 'My Profile', icon: UserCircle },
-            ].map(renderNavButton)}
+            {renderNavButton({ id: 'dashboard', label: 'Home', icon: Home })}
+            {renderNavButton({ id: 'technician-jobs', label: 'My Work', icon: ClipboardList })}
+            <button
+              type="button"
+              onClick={() => navigate('technician-jobs')}
+              className="campus-nav-item staff-center-action"
+              aria-label="Open My Jobs"
+              title="My Jobs"
+            >
+              <span className="campus-nav-icon"><Plus size={22} strokeWidth={2}/></span>
+              <span>Jobs</span>
+            </button>
+            {renderNavButton({ id: 'profile', label: 'Profile', icon: UserCircle })}
           </nav>
         ) : (
           <nav className="campus-bottom-nav" aria-label="Primary navigation">
