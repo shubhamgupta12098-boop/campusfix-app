@@ -572,6 +572,13 @@ export function ReportsScreen({ onNavigate }) {
       openStaffPerformance();
     }
   };
+  const openTopCategories = () => onNavigate?.('top-categories');
+  const onTopCategoriesKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openTopCategories();
+    }
+  };
 
   if (loading) return <Spinner/>;
 
@@ -615,7 +622,7 @@ export function ReportsScreen({ onNavigate }) {
         </section>
 
         <div className="admin-reference-top-grid">
-          <section className="admin-reference-card admin-reference-categories-card">
+          <section className="admin-reference-card admin-reference-categories-card admin-reference-clickable-card" role="button" tabIndex={0} onClick={openTopCategories} onKeyDown={onTopCategoriesKeyDown} aria-label="Open Top Categories">
             <h2>Top Categories</h2>
             <DonutChart items={report.byCategory} total={report.counts.total} admin/>
           </section>

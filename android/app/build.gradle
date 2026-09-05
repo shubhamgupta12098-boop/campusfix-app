@@ -13,7 +13,8 @@ android {
         versionCode 1
         versionName '1.0.0'
 
-        // Change only this URL if your Render hostname changes.
+        // Render-hosted CCMMS web application loaded by the Android WebView.
+        // Change this value only when the Render service hostname changes.
         buildConfigField 'String', 'WEB_APP_URL', '"https://campusfix-app-x04t.onrender.com"'
     }
 
@@ -40,7 +41,7 @@ android {
 
     packaging {
         resources {
-            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+            excludes += ['META-INF/AL2.0', 'META-INF/LGPL2.1']
         }
     }
 }
