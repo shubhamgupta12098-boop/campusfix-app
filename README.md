@@ -14,7 +14,7 @@ This package is the `CCMMS-icon-fixes` project converted to a production full-st
 - MongoDB GridFS for uploaded complaint/work photos and videos (persistent on Render)
 - JWT authentication + secure same-origin session cookie
 - bcrypt password hashing
-- Optional Firebase Authentication password-reset email flow
+- Firebase Authentication password-reset email flow with optional SMTP fallback
 - Render Blueprint (`render.yaml`) with auto deploy on GitHub commit
 - `/api/health` health check
 
@@ -23,7 +23,7 @@ This package is the `CCMMS-icon-fixes` project converted to a production full-st
 1. Install Node.js 20+.
 2. Copy `.env.example` to `.env`.
 3. Put your real `MONGODB_URI` in `.env`.
-4. Optional: add `FIREBASE_API_KEY` for Forgot Password.
+4. Add `FIREBASE_API_KEY` for Firebase Forgot Password. Optionally add SMTP variables for a delivery fallback.
 5. Run:
 
 ```bash
@@ -125,3 +125,6 @@ The frontend now uses these APIs. Browser IndexedDB/local JSON is no longer the 
 ## Android APK
 
 A native Android wrapper is included in `android/`. Open that folder in Android Studio to build an APK. The supplied CCMMS logo is used for the launcher icon and web app branding. See `android/README-APK.md`.
+
+### SMTP fallback variables
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` and optional `RESET_TOKEN_MINUTES`.

@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.provider.MediaStore;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -25,8 +26,12 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+
+import androidx.core.content.FileProvider;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4101;
@@ -35,6 +40,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private ProgressBar progressBar;
     private ValueCallback<Uri[]> fileChooserCallback;
+    private Uri cameraPhotoUri;
     private byte[] pendingSaveBytes;
     private String pendingSaveMime = "text/csv";
 
@@ -104,13 +110,32 @@ public class MainActivity extends Activity {
             ) {
                 if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
                 fileChooserCallback = filePathCallback;
+                cameraPhotoUri = null;
+
                 try {
-                    Intent intent = fileChooserParams.createIntent();
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+                    Intent pickerIntent = fileChooserParams.createIntent();
+                    Intent cameraIntent = createCameraIntent();
+
+                    // An HTML input with capture="environment" is the CCMMS
+                    // "Take Photo" action. Open the camera directly so Android
+                    // WebView does not silently fall back to a document picker.
+                    if (fileChooserParams.isCaptureEnabled() && cameraIntent != null) {
+                        startActivityForResult(cameraIntent, FILE_CHOOSER_REQUEST);
+                        return true;
+                    }
+
+                    Intent chooser = new Intent(Intent.ACTION_CHOOSER);
+                    chooser.putExtra(Intent.EXTRA_INTENT, pickerIntent);
+                    chooser.putExtra(Intent.EXTRA_TITLE, "Choose photo or video");
+                    if (cameraIntent != null && acceptsImages(fileChooserParams.getAcceptTypes())) {
+                        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cameraIntent});
+                    }
+                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST);
                     return true;
                 } catch (Exception e) {
                     fileChooserCallback = null;
-                    Toast.makeText(MainActivity.this, "File picker could not be opened.", Toast.LENGTH_SHORT).show();
+                    cameraPhotoUri = null;
+                    Toast.makeText(MainActivity.this, "Camera/file picker could not be opened.", Toast.LENGTH_SHORT).show();
                     return false;
                 }
             }
@@ -144,6 +169,39 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    private Intent createCameraIntent() {
+        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (cameraIntent.resolveActivity(getPackageManager()) == null) return null;
+
+        try {
+            File pictureDirectory = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+            if (pictureDirectory == null) pictureDirectory = getCacheDir();
+            File photoFile = File.createTempFile("ccmms-photo-", ".jpg", pictureDirectory);
+            cameraPhotoUri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    photoFile
+            );
+            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraPhotoUri);
+            cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            return cameraIntent;
+        } catch (IOException | IllegalArgumentException e) {
+            cameraPhotoUri = null;
+            return null;
+        }
+    }
+
+    private static boolean acceptsImages(String[] acceptTypes) {
+        if (acceptTypes == null || acceptTypes.length == 0) return true;
+        for (String type : acceptTypes) {
+            if (type == null || type.trim().isEmpty() || type.startsWith("image/") || "*/*".equals(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean handleExternalUrl(Uri uri) {
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
         if ("http".equals(scheme) || "https".equals(scheme)) {
@@ -170,10 +228,18 @@ public class MainActivity extends Activity {
 
         if (requestCode == FILE_CHOOSER_REQUEST) {
             if (fileChooserCallback != null) {
-                Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                Uri[] results = null;
+                if (resultCode == RESULT_OK) {
+                    if ((data == null || data.getData() == null) && cameraPhotoUri != null) {
+                        results = new Uri[]{cameraPhotoUri};
+                    } else {
+                        results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                    }
+                }
                 fileChooserCallback.onReceiveValue(results);
                 fileChooserCallback = null;
             }
+            cameraPhotoUri = null;
             return;
         }
 

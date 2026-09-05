@@ -284,7 +284,7 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleMediaUpload}/>
           <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="sr-only" onChange={handleMediaUpload}/>
           <div className="student-media-actions">
-            <button type="button" disabled={media.length >= MAX_MEDIA && hasPhoto} onClick={() => cameraInputRef.current?.click()}><Camera size={20}/>Take Photo</button>
+            <button type="button" disabled={media.length >= MAX_MEDIA && hasPhoto} onClick={() => { const input = cameraInputRef.current; if (input) { input.value = ''; input.click(); } }}><Camera size={20}/>Take Photo</button>
             <button type="button" disabled={media.length >= MAX_MEDIA} onClick={() => galleryInputRef.current?.click()}><Images size={20}/>Photo / Video</button>
           </div>
           {media.length > 0 && <div className="student-media-preview">{media.map((item, index) => <div key={`${item.name}-${index}`}>

@@ -274,7 +274,7 @@ export function RaiseComplaintScreen({ onDone }) {
           <input ref={galleryInputRef} type="file" accept="image/*,video/*" multiple className="sr-only" onChange={handleMediaUpload} aria-label="Choose photos or videos from gallery"/>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button type="button" disabled={media.length >= MAX_MEDIA && hasPhoto} onClick={() => cameraInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-xl border border-blue-300 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Camera className="w-5 h-5"/>Take Photo</button>
+            <button type="button" disabled={media.length >= MAX_MEDIA && hasPhoto} onClick={() => { const input = cameraInputRef.current; if (input) { input.value = ''; input.click(); } }} className="flex items-center justify-center gap-2 rounded-xl border border-blue-300 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Camera className="w-5 h-5"/>Take Photo</button>
             <button type="button" disabled={media.length >= MAX_MEDIA} onClick={() => galleryInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-xl border border-blue-300 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Images className="w-5 h-5"/>Choose from Gallery</button>
           </div>
 

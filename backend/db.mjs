@@ -14,6 +14,7 @@ const ALLOWED_COLLECTIONS = [
   'notifications',
   'work_orders',
   'complaint_status_history',
+  'password_reset_tokens',
 ];
 
 function validateMongoUri(uri) {
@@ -163,6 +164,8 @@ export async function connectDatabase() {
   await dbCollection('complaints').createIndex({ assigned_to: 1, status: 1 });
   await dbCollection('notifications').createIndex({ user_id: 1, is_read: 1, created_at: -1 });
   await dbCollection('work_orders').createIndex({ complaint_id: 1, created_at: -1 });
+  await dbCollection('password_reset_tokens').createIndex({ token_hash: 1 }, { unique: true });
+  await dbCollection('password_reset_tokens').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 
   await seedDatabase();
   await seedBootstrapAdmin();

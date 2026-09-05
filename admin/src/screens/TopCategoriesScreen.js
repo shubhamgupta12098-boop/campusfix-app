@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Building2,
+  Armchair,
+  Droplets,
   Wifi as MonitorWifi,
   MoreHorizontal,
-  ShieldCheck,
-  Wrench,
+  Sparkles,
   Zap,
 } from 'lucide-react';
 import { localData } from '@/lib/localDataClient';
@@ -24,7 +24,7 @@ const GROUPS = [
     name: 'Plumbing',
     color: '#2f8df4',
     tone: 'blue',
-    icon: Wrench,
+    icon: Droplets,
     matches: (value) => /plumbing|plumb|water|leak|pipe/.test(value),
   },
   {
@@ -32,7 +32,7 @@ const GROUPS = [
     name: 'Furniture',
     color: '#9748f2',
     tone: 'purple',
-    icon: Building2,
+    icon: Armchair,
     matches: (value) => /furniture|carpentry|carpent|chair|table|desk|door|window/.test(value),
   },
   {
@@ -48,7 +48,7 @@ const GROUPS = [
     name: 'Cleanliness',
     color: '#20dbea',
     tone: 'cyan',
-    icon: ShieldCheck,
+    icon: Sparkles,
     matches: (value) => /cleanliness|cleaning|clean|sanitation|garbage|waste/.test(value),
   },
   {
