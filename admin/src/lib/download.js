@@ -19,36 +19,39 @@ export async function downloadTextFile(filename, content, mimeType = 'text/csv')
 }
 
 /**
- * Share a generated text file when supported. In the Android APK this opens
- * the native share sheet. Browsers use Web Share and then email fallback.
+ * Share report content through the platform share chooser.
+ *
+ * We intentionally share as plain text (instead of a CSV attachment) because
+ * Android/iOS/Chrome then offer a much wider set of compatible targets such as
+ * WhatsApp, Gmail, Messages and other installed social apps. Users who need the
+ * actual CSV file can still use the separate Export button.
  */
 export async function shareTextFile({ filename, content, mimeType = 'text/csv', title, text }) {
+  const heading = title || filename || 'CCMMS Report';
+  const intro = String(text || '').trim();
+  const report = String(content || '').trim();
+  const shareBody = [intro, report].filter(Boolean).join('\n\n');
+
   if (window.CCMMSAndroid?.shareText) {
-    window.CCMMSAndroid.shareText(filename, mimeType, content, title || filename, text || '');
+    window.CCMMSAndroid.shareText(filename, 'text/plain', report, heading, intro);
     return true;
   }
 
-  const file = new File([content], filename, { type: mimeType });
-
   if (navigator.share) {
     try {
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: title || filename, text: text || '' });
-      } else {
-        await navigator.share({ title: title || filename, text: text || '' });
-      }
+      await navigator.share({
+        title: heading,
+        text: shareBody || heading,
+      });
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') return false;
-      console.warn('Native report share failed; using email fallback.', error);
+      console.warn('System share chooser failed; using email fallback.', error);
     }
   }
 
-  const subject = encodeURIComponent(title || filename);
-  const body = encodeURIComponent(
-    `${text || 'Campus maintenance report'}\n\n` +
-    'The generated CSV could not be attached automatically in this browser. Use Export to download it and attach it to this email.',
-  );
+  const subject = encodeURIComponent(heading);
+  const body = encodeURIComponent(shareBody || 'Campus maintenance report');
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
   return true;
 }

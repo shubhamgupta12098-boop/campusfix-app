@@ -220,13 +220,30 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void shareText(String filename, String mimeType, String content, String title, String text) {
             runOnUiThread(() -> {
+                // Use text/plain for the Android share chooser so the widest set of
+                // installed apps can appear (WhatsApp, Gmail, Messages, Instagram
+                // when that installed version accepts text shares, etc.).
                 Intent shareIntent = new Intent(Intent.ACTION_SEND);
-                shareIntent.setType(normalizeMime(mimeType));
-                shareIntent.putExtra(Intent.EXTRA_SUBJECT, title == null || title.isEmpty() ? safeFilename(filename) : title);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(
+                    Intent.EXTRA_SUBJECT,
+                    title == null || title.isEmpty() ? safeFilename(filename) : title
+                );
+
                 String intro = text == null ? "" : text.trim();
-                String report = content == null ? "" : content;
-                shareIntent.putExtra(Intent.EXTRA_TEXT, intro.isEmpty() ? report : intro + "\n\n" + report);
-                startActivity(Intent.createChooser(shareIntent, "Send CCMMS report"));
+                String report = content == null ? "" : content.trim();
+                String shareBody;
+                if (intro.isEmpty()) {
+                    shareBody = report;
+                } else if (report.isEmpty()) {
+                    shareBody = intro;
+                } else {
+                    shareBody = intro + "\n\n" + report;
+                }
+
+                shareIntent.putExtra(Intent.EXTRA_TEXT, shareBody);
+                Intent chooser = Intent.createChooser(shareIntent, "Share CCMMS report via");
+                startActivity(chooser);
             });
         }
     }
