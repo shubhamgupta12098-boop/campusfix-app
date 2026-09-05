@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { dbCollection, cleanDoc, newId } from './db.mjs';
 import { config } from './config.mjs';
-import { firebaseErrorMessage, sendFirebasePasswordReset, verifyFirebasePassword } from './firebase.mjs';
+import { firebaseErrorMessage, sendFirebasePasswordReset, verifyFirebasePassword, deleteFirebaseRecoveryIdentity, canUseBrowserFirebaseFallback } from './firebase.mjs';
 
 export const authRouter = express.Router();
 const SESSION_COOKIE = 'ccmms_session';
@@ -95,16 +95,16 @@ authRouter.post('/login', async (req, res, next) => {
 
     let valid = false;
     if (config.firebaseApiKey && authUser.firebase_recovery_enabled === true) {
-      // During a Forgot Password recovery, Firebase is the temporary source of
-      // truth. This prevents the old MongoDB password from continuing to work
-      // after a reset email has been requested. After the first successful
-      // sign-in with the Firebase-reset password, sync it back to MongoDB and
-      // return to the normal MongoDB/JWT login flow.
-      valid = await verifyFirebasePassword(authUser.email, password);
+      // A requested Firebase recovery temporarily becomes the password source.
+      // After the user signs in with the password chosen on Firebase's reset
+      // page, copy it to MongoDB and delete the recovery-only Firebase identity.
+      const firebaseAuth = await verifyFirebasePassword(authUser.email, password);
+      valid = firebaseAuth.ok;
       if (valid) {
         await authCollection.updateOne({ id: authUser.id }, { $set: {
           password_hash: await bcrypt.hash(password, 12), firebase_recovery_enabled: false, updated_at: new Date().toISOString(),
         }});
+        await deleteFirebaseRecoveryIdentity(firebaseAuth.idToken);
       }
     } else {
       valid = await bcrypt.compare(password, authUser.password_hash || '');
@@ -211,11 +211,49 @@ authRouter.post('/forgot-password', async (req, res, next) => {
       });
     } catch (error) {
       console.error('[Firebase forgot-password]', error?.code || error?.message || error);
-      return res.status(503).json({
-        error: firebaseErrorMessage(error),
-      });
+      if (canUseBrowserFirebaseFallback(error)) {
+        // Some Firebase Web API keys are intentionally restricted to browser
+        // referrers. In that case the login page performs the same official
+        // Identity Toolkit request from the user's browser, then confirms it.
+        const recoveryTicket = jwt.sign(
+          { purpose: 'firebase-forgot-password', email, accountId: account.id },
+          config.jwtSecret,
+          { expiresIn: '10m' },
+        );
+        return res.json({
+          ok: true,
+          delivery: 'firebase-browser',
+          clientFallback: true,
+          firebaseWebApiKey: config.firebaseApiKey,
+          recoveryTicket,
+          message: 'Firebase will send the reset link from this device.',
+        });
+      }
+      return res.status(503).json({ error: firebaseErrorMessage(error) });
     }
   } catch (error) { next(error); }
 });
+
+authRouter.post('/forgot-password/confirm-client', async (req, res, next) => {
+  try {
+    const ticket = String(req.body?.recoveryTicket || '');
+    if (!ticket) return res.status(400).json({ error: 'Recovery confirmation is missing.' });
+    const claims = jwt.verify(ticket, config.jwtSecret);
+    if (claims?.purpose !== 'firebase-forgot-password' || !claims?.accountId) {
+      return res.status(400).json({ error: 'Invalid recovery confirmation.' });
+    }
+    await dbCollection('auth_users').updateOne({ id: String(claims.accountId) }, { $set: {
+      firebase_recovery_enabled: true,
+      updated_at: new Date().toISOString(),
+    }});
+    return res.json({ ok: true });
+  } catch (error) {
+    if (error?.name === 'TokenExpiredError' || error?.name === 'JsonWebTokenError') {
+      return res.status(400).json({ error: 'Recovery confirmation expired. Request a new reset link.' });
+    }
+    next(error);
+  }
+});
+
 
 

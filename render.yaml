@@ -21,7 +21,7 @@ services:
       - key: MONGODB_DB
         value: ccmms
       - key: FIREBASE_API_KEY
-        sync: false
+        value: AIzaSyB4UVQxSxJXcMNC0HxQEF-g3jpBLvtBgPQ
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

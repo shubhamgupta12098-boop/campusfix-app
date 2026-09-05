@@ -1,26 +1,29 @@
-# Firebase Forgot Password (only)
+# Firebase Forgot Password (CCMMS)
 
-CCMMS keeps normal signup/login credentials in MongoDB. Firebase Authentication is used only to deliver and verify the Forgot Password recovery flow.
+CCMMS uses MongoDB/JWT for normal sign-in. Firebase Authentication is used only for password recovery.
 
-## Firebase Console
+## Firebase setup
 
-1. Open Firebase Console -> your project -> Authentication -> Sign-in method.
-2. Enable **Email/Password**.
-3. Open Project settings -> General and copy the **Web API Key**.
-4. In Render -> Service -> Environment add `FIREBASE_API_KEY=<your Web API Key>`.
-5. Redeploy the service.
+1. Open Firebase Console for the project that owns the configured Web API key.
+2. Go to **Authentication > Sign-in method**.
+3. Enable **Email/Password**.
+4. The supplied Firebase Web API key is already wired into this project as a fallback and in `render.yaml`.
+   You can still override it using the Render environment variable `FIREBASE_API_KEY`.
 
-No SMTP/Gmail variables are required.
+## Recovery flow
 
-## How recovery works
+1. User taps **Forgot password?** and enters a CCMMS-registered email.
+2. CCMMS creates a recovery-only Firebase Auth identity if needed.
+3. Firebase sends its official password-reset email.
+4. User sets a new password on Firebase's secure reset page.
+5. On the next CCMMS sign-in, the new Firebase password is verified once, copied into MongoDB, and the temporary Firebase recovery identity is deleted.
+6. Normal CCMMS login continues to use MongoDB/JWT.
 
-- User taps Forgot password and enters the email registered in CCMMS.
-- CCMMS asks Firebase to send the official Firebase password-reset email.
-- For an older CCMMS account that does not yet exist in Firebase Auth, CCMMS creates a recovery-only Firebase identity automatically.
-- The user changes the password using Firebase's secure reset link.
-- On the next CCMMS sign-in with that new password, CCMMS verifies it once with Firebase and synchronizes the new password hash into MongoDB.
-- Normal later logins are MongoDB/JWT based again.
+If Render cannot call Firebase because the Web API key is restricted to browser referrers, the login page automatically performs the Firebase reset request from the browser and confirms the recovery state with the server.
 
-## Render check
+## Troubleshooting
 
-Open `/api/health`. `forgotPassword` should be `firebase`.
+- `OPERATION_NOT_ALLOWED`: enable Email/Password in Firebase Authentication.
+- `INVALID_API_KEY`: verify the Web API key belongs to the intended Firebase project.
+- `TOO_MANY_ATTEMPTS`: wait a few minutes before retrying.
+- Check Inbox, Promotions and Spam for Firebase's reset email.

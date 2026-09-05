@@ -9,6 +9,10 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const port = Number(process.env.PORT || 3000);
 const renderUrl = String(process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/$/, '');
 const configuredBaseUrl = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
+// Firebase Web API keys are public client configuration values. Render can
+// override this fallback with FIREBASE_API_KEY, but the supplied CCMMS key
+// keeps Forgot Password working even when that environment variable is absent.
+const defaultFirebaseWebApiKey = 'AIzaSyB4UVQxSxJXcMNC0HxQEF-g3jpBLvtBgPQ';
 
 export const config = {
   nodeEnv,
@@ -18,7 +22,7 @@ export const config = {
   jwtSecret: String(process.env.JWT_SECRET || 'dev-only-change-this-jwt-secret-before-production'),
   // 'never' keeps the device signed in until the user explicitly logs out.
   jwtExpiresIn: String(process.env.JWT_EXPIRES_IN || 'never').trim().toLowerCase(),
-  firebaseApiKey: String(process.env.FIREBASE_API_KEY || '').trim(),
+  firebaseApiKey: String(process.env.FIREBASE_API_KEY || defaultFirebaseWebApiKey).trim(),
   appBaseUrl: configuredBaseUrl || renderUrl || `http://localhost:${port}`,
   corsOrigins: String(process.env.CORS_ORIGINS || '')
     .split(',').map((value) => value.trim()).filter(Boolean),

@@ -19,7 +19,7 @@ Returns current user/profile.
 ```json
 { "email": "user@example.com" }
 ```
-Requires `FIREBASE_API_KEY`. Firebase Authentication is used only for the Forgot Password recovery email.
+Firebase Authentication is used only for the Forgot Password recovery flow. The supplied Web API key is preconfigured, and `FIREBASE_API_KEY` can override it.
 
 ## Data resources
 
