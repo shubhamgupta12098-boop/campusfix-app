@@ -1,14 +1,10 @@
-/** Download a text file in the browser. */
+/** Download a text file in browser or the native CCMMS Android wrapper. */
 export async function downloadTextFile(filename, content, mimeType = 'text/csv') {
-  const file = new File([content], filename, { type: mimeType });
-  if (navigator.canShare?.({ files: [file] }) && navigator.share) {
-    try {
-      await navigator.share({ files: [file], title: filename });
-      return;
-    } catch (error) {
-      if (error?.name === 'AbortError') return;
-    }
+  if (window.CCMMSAndroid?.downloadText) {
+    window.CCMMSAndroid.downloadText(filename, mimeType, content);
+    return true;
   }
+
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -17,5 +13,6 @@ export async function downloadTextFile(filename, content, mimeType = 'text/csv')
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  return true;
 }

@@ -8,6 +8,7 @@ import {
     ClipboardList,
     Home,
     LogOut,
+    ListFilter,
     Menu,
     Plus,
     Search,
@@ -29,6 +30,8 @@ import { WorkOrdersScreen } from '@/screens/WorkOrdersScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
+import { AppPerformanceScreen } from '@/screens/AppPerformanceScreen';
+import { ComplaintsScreen } from '@/screens/ComplaintsScreen';
 import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -105,6 +108,8 @@ const ADMIN_SCREEN_TITLES = {
     feedback: 'Feedback & Ratings',
     notifications: 'Notifications',
     profile: 'My Profile',
+    'app-performance': 'App Performance',
+    complaints: 'Complaints',
     'complaint-detail': 'Complaint Details',
 };
 
@@ -123,6 +128,7 @@ export const AppShell = () => {
     const { profile, signOut } = useAuthStore();
     const [screen, setScreen] = useState('dashboard');
     const [selectedComplaintId, setSelectedComplaintId] = useState(null);
+    const [complaintsFilter, setComplaintsFilter] = useState('total');
     const [complaintReturnScreen, setComplaintReturnScreen] = useState(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -199,11 +205,21 @@ export const AppShell = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const openComplaints = (filter = 'total') => {
+        setComplaintsFilter(filter);
+        setComplaintReturnScreen('complaints');
+        setScreen('complaints');
+        setDrawerOpen(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const activeScreen = screen === 'complaint-detail'
-        ? role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign'
+        ? role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : (complaintReturnScreen === 'complaints' ? 'dashboard' : 'assign')
         : role === 'admin' && ['users', 'notifications'].includes(screen) ? 'assign'
         : role === 'admin' && screen === 'feedback' ? 'reports'
         : role === 'admin' && screen === 'my-jobs' ? 'work-orders'
+        : role === 'admin' && screen === 'app-performance' ? 'profile'
+        : role === 'admin' && screen === 'complaints' ? 'dashboard'
         : screen;
 
     const initials = (profile?.full_name || 'CampusFix User')
@@ -234,10 +250,10 @@ export const AppShell = () => {
     const actionActive = activeScreen === bottomNav.action.id;
     const ActionIcon = bottomNav.action.icon;
     const adminPageTitle = ADMIN_SCREEN_TITLES[screen] || 'Campus Maintenance';
-    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'complaint-detail']);
+    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'app-performance', 'complaints', 'complaint-detail']);
     const showAdminBack = role === 'admin' && adminBackScreens.has(screen);
     const defaultComplaintReturn = role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign';
-    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : 'dashboard';
+    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : screen === 'app-performance' ? 'profile' : 'dashboard';
 
     return (<div className={'campus-app-shell ' + (role === 'admin' ? `admin-ui admin-screen-${screen} ` : '') + (role === 'admin' && screen === 'profile' ? 'admin-profile-mode ' : '') + (role === 'admin' && showAdminBack ? 'admin-has-back ' : '')}>
       <div className="campus-app-frame">
@@ -274,17 +290,14 @@ export const AppShell = () => {
                 <button type="button" onClick={() => navigate(adminBackTarget)} className="campus-icon-button admin-mobile-menu admin-back-button" aria-label="Go back">
                   <ChevronLeft size={30}/>
                 </button>
-              ) : (
+              ) : screen !== 'reports' ? (
                 <button type="button" onClick={() => setDrawerOpen(true)} className="campus-icon-button admin-mobile-menu admin-menu-button" aria-label="Open app menu">
                   <Menu size={22}/>
                 </button>
-              )}
+              ) : null}
               <div className={`admin-topbar-copy ${screen === 'reports' ? 'admin-reports-topbar-brand' : ''}`}>
                 {screen === 'reports' ? (
-                  <>
-                    <span className="admin-reports-brand-mark"><ShieldCheck size={21} fill="currentColor"/></span>
-                    <h1><span>CCMMS</span> <em>Admin</em></h1>
-                  </>
+                  <h1><span>CCMMS</span> <em>Admin</em></h1>
                 ) : (
                   <>
                     <p>ADMIN CONSOLE</p>
@@ -297,7 +310,12 @@ export const AppShell = () => {
                   <Search size={17}/>
                   <input type="search" placeholder="Search..." aria-label="Search"/>
                 </label>
-                {screen === 'notifications' ? (
+                {screen === 'complaints' ? (
+                  <div className="admin-complaints-top-actions">
+                    <button type="button" className="campus-icon-button" onClick={() => window.dispatchEvent(new CustomEvent('campusfix:complaints-filter-toggle'))} aria-label="Filter complaints" title="Filter complaints"><ListFilter size={24}/></button>
+                    <button type="button" className="campus-icon-button" onClick={() => window.dispatchEvent(new CustomEvent('campusfix:complaints-focus-search'))} aria-label="Search complaints" title="Search complaints"><Search size={25}/></button>
+                  </div>
+                ) : screen === 'notifications' ? (
                   <button
                     type="button"
                     className="admin-clear-all-header"
@@ -311,7 +329,7 @@ export const AppShell = () => {
                     {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
                   </button>
                 )}
-                {screen !== 'notifications' && screen !== 'reports' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
+                {screen !== 'notifications' && screen !== 'reports' && screen !== 'complaints' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
               </div>
             </>
           ) : (
@@ -341,7 +359,7 @@ export const AppShell = () => {
 
         <main className="campus-page-content" data-screen={screen}>
           <ErrorBoundary key={`${screen}-${sharedDataVersion}`} resetKey={`${screen}-${sharedDataVersion}`}>
-            {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint}/>}
+            {screen === 'dashboard' && <DashboardScreen onNavigate={navigate} onOpenComplaint={openComplaint} onOpenComplaints={openComplaints}/>}
             {screen === 'complaint-detail' && selectedComplaintId && (<ComplaintDetailScreen complaintId={selectedComplaintId} onBack={() => navigate(complaintReturnScreen || defaultComplaintReturn)}/>)}
             {screen === 'notifications' && <NotificationsScreen onOpenComplaint={openComplaint}/>}
             {screen === 'reports' && <ReportsScreen onNavigate={navigate}/>}
@@ -351,6 +369,8 @@ export const AppShell = () => {
             {screen === 'my-jobs' && <WorkOrdersScreen onOpenComplaint={openComplaint}/>}
             {screen === 'approvals' && <ApprovalScreen onOpenComplaint={openComplaint}/>}
             {screen === 'profile' && <ProfileScreen onNavigate={navigate}/>}
+            {screen === 'app-performance' && <AppPerformanceScreen/>}
+            {screen === 'complaints' && <ComplaintsScreen initialFilter={complaintsFilter} onFilterChange={setComplaintsFilter} onOpenComplaint={(id) => openComplaint(id, 'complaints')}/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}
           </ErrorBoundary>
         </main>

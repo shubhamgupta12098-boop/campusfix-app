@@ -121,3 +121,7 @@ Health check:
 - `GET /api/media/:id`
 
 The frontend now uses these APIs. Browser IndexedDB/local JSON is no longer the production data source.
+
+## Android APK
+
+A native Android wrapper is included in `android/`. Open that folder in Android Studio to build an APK. The supplied CCMMS logo is used for the launcher icon and web app branding. See `android/README-APK.md`.

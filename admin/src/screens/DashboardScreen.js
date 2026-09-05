@@ -6,7 +6,7 @@ import { STATUS_CONFIG, PRIORITY_CONFIG, timeAgo } from '@/lib/constants';
 import { ClipboardList, CheckCircle2, Clock, AlertTriangle, PlusCircle, ArrowRight, Wrench, Users, UserCog, BarChart3, Star } from 'lucide-react';
 const ACTIVE_STATUSES = ['submitted', 'verified', 'assigned', 'in_progress', 'waiting_approval'];
 const COMPLETED_STATUSES = ['resolved', 'closed'];
-export function DashboardScreen({ onNavigate, onOpenComplaint }) {
+export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints }) {
     const { profile } = useAuthStore();
     const [complaints, setComplaints] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -102,6 +102,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
       </Card>
     </div>);
     if (isAdmin) {
+        const openCount = complaints.filter((c) => ['submitted', 'verified'].includes(c.status)).length;
         const inProgress = complaints.filter((c) => ['assigned', 'in_progress', 'waiting_approval'].includes(c.status)).length;
         const ratedComplaints = complaints.filter((c) => Number(c.feedback_rating) > 0);
         const averageRating = ratedComplaints.length
@@ -122,9 +123,9 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
 
           <div className="admin-section-kicker">OVERALL STATS</div>
           <div className="admin-mobile-stat-row">
-            <AdminReferenceStat icon={ClipboardList} tone="blue" label="Total Complaints" value={stats.total} meta={`${stats.open} active`}/>
-            <AdminReferenceStat icon={AlertTriangle} tone="green" label="Open" value={stats.open} meta={`${stats.unassigned} unassigned`}/>
-            <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta={`${Math.max(activeStaff, 1)} staff`}/>
+            <AdminReferenceStat icon={ClipboardList} tone="blue" label="Total Complaints" value={stats.total} meta={`${openCount + inProgress} active`} onClick={() => onOpenComplaints?.('total')}/>
+            <AdminReferenceStat icon={AlertTriangle} tone="green" label="Open" value={openCount} meta={`${stats.unassigned} unassigned`} onClick={() => onOpenComplaints?.('open')}/>
+            <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta={`${Math.max(activeStaff, 1)} staff`} onClick={() => onOpenComplaints?.('in_progress')}/>
           </div>
 
           <button type="button" onClick={() => onNavigate('feedback')} className="admin-rating-card admin-rating-card-button" aria-label="Open feedback and ratings">
@@ -189,8 +190,8 @@ export function DashboardScreen({ onNavigate, onOpenComplaint }) {
       </div>
     </div>);
 }
-function AdminReferenceStat({ icon: Icon, tone, label, value, meta }) {
-    return <div className="admin-reference-stat"><span className={`admin-reference-stat-icon ${tone}`}><Icon/></span><div><small>{label}</small><strong>{value}</strong><em>{meta}</em></div></div>;
+function AdminReferenceStat({ icon: Icon, tone, label, value, meta, onClick }) {
+    return <button type="button" onClick={onClick} className="admin-reference-stat admin-reference-stat-button"><span className={`admin-reference-stat-icon ${tone}`}><Icon/></span><div><small>{label}</small><strong>{value}</strong><em>{meta}</em></div></button>;
 }
 
 function ComplaintList({ complaints, onOpenComplaint }) {
