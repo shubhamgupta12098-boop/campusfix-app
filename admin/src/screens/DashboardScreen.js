@@ -66,6 +66,12 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
         () => complaints.filter((c) => String(c.status || '').toLowerCase() !== 'rejected'),
         [complaints],
     );
+    // Rejected complaints are intentionally visible only on the Admin Home/Dashboard.
+    // They stay excluded from Total/Open/In Progress/Closed, Reports and Top Categories.
+    const rejectedComplaints = useMemo(
+        () => complaints.filter((c) => String(c.status || '').toLowerCase() === 'rejected'),
+        [complaints],
+    );
     const stats = useMemo(() => {
         const now = new Date();
         const total = reportableComplaints.length;
@@ -132,6 +138,8 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
             <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta={`${Math.max(activeStaff, 1)} staff`} onClick={() => onOpenComplaints?.('in_progress')}/>
           </div>
 
+          <RejectedHomePanel complaints={rejectedComplaints} onOpenComplaint={onOpenComplaint}/>
+
           <button type="button" onClick={() => onNavigate('feedback')} className="admin-rating-card admin-rating-card-button" aria-label="Open feedback and ratings">
             <span>Average Rating</span>
             <strong>{averageRating}<small>/5</small></strong>
@@ -194,6 +202,24 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
       </div>
     </div>);
 }
+function RejectedHomePanel({ complaints, onOpenComplaint }) {
+    const visible = complaints.slice(0, 3);
+    return <section className="admin-rejected-home" aria-label="Rejected complaints">
+      <div className="admin-rejected-home-head">
+        <span className="admin-rejected-home-icon"><AlertTriangle/></span>
+        <div><small>HOME ONLY</small><strong>Rejected Complaints</strong><p>Not included in totals, reports or categories.</p></div>
+        <b>{complaints.length}</b>
+      </div>
+      {visible.length > 0 && <div className="admin-rejected-home-list">
+        {visible.map((complaint) => <button key={complaint.id} type="button" onClick={() => onOpenComplaint?.(complaint.id)}>
+          <span><strong>{complaint.title || 'Rejected complaint'}</strong><small>{complaint.complaint_no || 'Complaint'} · {complaint.buildings?.name || complaint.location_description || 'Campus'}</small></span>
+          <em>Rejected</em>
+        </button>)}
+      </div>}
+      {complaints.length === 0 && <p className="admin-rejected-home-empty">No rejected complaints.</p>}
+    </section>;
+}
+
 function AdminReferenceStat({ icon: Icon, tone, label, value, meta, onClick }) {
     return <button type="button" onClick={onClick} className="admin-reference-stat admin-reference-stat-button"><span className={`admin-reference-stat-icon ${tone}`}><Icon/></span><div><small>{label}</small><strong>{value}</strong><em>{meta}</em></div></button>;
 }
