@@ -14,7 +14,6 @@ import { mediaRouter } from './backend/media.mjs';
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC_DIR = join(ROOT, 'public');
 const LOGIN_PAGE = join(PUBLIC_DIR, 'login.html');
-const RESET_PAGE = join(PUBLIC_DIR, 'reset-password.html');
 const app = express();
 
 app.set('trust proxy', 1);
@@ -67,7 +66,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     service: 'CCMMS API',
     database: 'mongodb',
-    forgotPassword: config.firebaseApiKey && config.smtpUser ? 'firebase+smtp-fallback' : config.firebaseApiKey ? 'firebase' : config.smtpUser ? 'smtp' : 'not-configured',
+    forgotPassword: config.firebaseApiKey ? 'firebase' : 'not-configured',
     uptimeSeconds: Math.round(process.uptime()),
     time: new Date().toISOString(),
   });
@@ -104,11 +103,6 @@ const sendLogin = (_req, res) => {
 
 app.get('/', sendLogin);
 app.get('/login', sendLogin);
-app.get('/reset-password', (_req, res) => {
-  if (!existsSync(RESET_PAGE)) return res.status(503).send('Reset page missing.');
-  res.set('Cache-Control', 'no-store, max-age=0');
-  return res.sendFile(RESET_PAGE);
-});
 
 const portals = {
   student: join(ROOT, 'student', 'dist'),

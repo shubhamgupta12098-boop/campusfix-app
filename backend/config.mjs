@@ -18,13 +18,6 @@ export const config = {
   jwtSecret: String(process.env.JWT_SECRET || 'dev-only-change-this-jwt-secret-before-production'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   firebaseApiKey: String(process.env.FIREBASE_API_KEY || '').trim(),
-  smtpHost: String(process.env.SMTP_HOST || '').trim(),
-  smtpPort: Number(process.env.SMTP_PORT || 465),
-  smtpSecure: bool(process.env.SMTP_SECURE, true),
-  smtpUser: String(process.env.SMTP_USER || '').trim(),
-  smtpPass: String(process.env.SMTP_PASS || ''),
-  mailFrom: String(process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
-  resetTokenMinutes: Math.max(10, Number(process.env.RESET_TOKEN_MINUTES || 30)),
   appBaseUrl: configuredBaseUrl || renderUrl || `http://localhost:${port}`,
   corsOrigins: String(process.env.CORS_ORIGINS || '')
     .split(',').map((value) => value.trim()).filter(Boolean),

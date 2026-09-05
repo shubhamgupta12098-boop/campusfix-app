@@ -22,20 +22,6 @@ services:
         value: ccmms
       - key: FIREBASE_API_KEY
         sync: false
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "465"
-      - key: SMTP_SECURE
-        value: "true"
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: MAIL_FROM
-        sync: false
-      - key: RESET_TOKEN_MINUTES
-        value: "30"
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

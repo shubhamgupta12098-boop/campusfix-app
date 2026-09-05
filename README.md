@@ -23,7 +23,7 @@ This package is the `CCMMS-icon-fixes` project converted to a production full-st
 1. Install Node.js 20+.
 2. Copy `.env.example` to `.env`.
 3. Put your real `MONGODB_URI` in `.env`.
-4. Add `FIREBASE_API_KEY` for Firebase Forgot Password. Optionally add SMTP variables for a delivery fallback.
+4. Add `FIREBASE_API_KEY` for Firebase Forgot Password. Firebase is used only for password recovery.
 5. Run:
 
 ```bash
@@ -79,7 +79,7 @@ Required Render environment values:
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `ADMIN_NAME`
-- `FIREBASE_API_KEY` (only if Forgot Password email is required)
+- `FIREBASE_API_KEY` (required for Forgot Password; Firebase is not used for normal CCMMS login/signup)
 
 Build command:
 

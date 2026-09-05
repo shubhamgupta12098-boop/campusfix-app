@@ -3,8 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { dbCollection, cleanDoc, newId } from './db.mjs';
 import { config } from './config.mjs';
-import { createFirebasePasswordIdentity, firebaseErrorMessage, sendFirebasePasswordReset, verifyFirebasePassword } from './firebase.mjs';
-import { consumePasswordResetToken, hasSmtpPasswordReset, sendSmtpPasswordReset } from './mail.mjs';
+import { firebaseErrorMessage, sendFirebasePasswordReset, verifyFirebasePassword } from './firebase.mjs';
 
 export const authRouter = express.Router();
 const SESSION_COOKIE = 'ccmms_session';
@@ -88,14 +87,21 @@ authRouter.post('/login', async (req, res, next) => {
     if (expectedRole && profile.role !== expectedRole) return res.status(403).json({ error: `Please use a ${expectedRole} account on this portal.` });
     if (profile.is_active === false) return res.status(403).json({ error: 'Your account is inactive.' });
 
-    let valid = await bcrypt.compare(password, authUser.password_hash || '');
-    if (!valid && config.firebaseApiKey && authUser.firebase_recovery_enabled === true) {
+    let valid = false;
+    if (config.firebaseApiKey && authUser.firebase_recovery_enabled === true) {
+      // During a Forgot Password recovery, Firebase is the temporary source of
+      // truth. This prevents the old MongoDB password from continuing to work
+      // after a reset email has been requested. After the first successful
+      // sign-in with the Firebase-reset password, sync it back to MongoDB and
+      // return to the normal MongoDB/JWT login flow.
       valid = await verifyFirebasePassword(authUser.email, password);
       if (valid) {
         await authCollection.updateOne({ id: authUser.id }, { $set: {
           password_hash: await bcrypt.hash(password, 12), firebase_recovery_enabled: false, updated_at: new Date().toISOString(),
         }});
       }
+    } else {
+      valid = await bcrypt.compare(password, authUser.password_hash || '');
     }
     if (!valid) return res.status(401).json({ error: 'Invalid ID/email or password.' });
     const token = issueToken(profile);
@@ -127,7 +133,6 @@ authRouter.post('/signup', async (req, res, next) => {
     await dbCollection('profiles').insertOne(profile);
     await dbCollection('auth_users').insertOne({ id, profile_id: id, email, password_hash: await bcrypt.hash(password, 12), firebase_recovery_enabled: false, created_at: now, updated_at: now });
     if (role === 'staff') await dbCollection('technicians').insertOne({ id, employee_code: collegeId, skills: [], current_workload: 0, availability_status: 'available', area_coverage: [], created_at: now, updated_at: now });
-    if (config.firebaseApiKey) createFirebasePasswordIdentity(email, password).catch((e) => console.warn('[Firebase signup]', e?.message || e));
     const token = issueToken(profile); setSessionCookie(res, token);
     res.status(201).json({ token, user: publicUser(profile), profile });
   } catch (error) { next(error); }
@@ -172,79 +177,39 @@ authRouter.post('/forgot-password', async (req, res, next) => {
     if (!forgotRateLimit(req, email)) return res.status(429).json({ error: 'Too many reset requests. Please wait and try again.' });
 
     const account = await dbCollection('auth_users').findOne({ email });
+    // Do not reveal whether an address exists in CCMMS.
     if (!account) {
-      return res.json({ ok: true, message: 'If this email is registered, a reset link will be sent.' });
+      return res.json({ ok: true, delivery: 'firebase', message: 'If this email is registered, Firebase will send a password reset link.' });
     }
 
-    let firebaseError = null;
-    if (config.firebaseApiKey) {
-      try {
-        await sendFirebasePasswordReset(email);
-        await dbCollection('auth_users').updateOne({ id: account.id }, { $set: {
-          firebase_recovery_enabled: true,
-          updated_at: new Date().toISOString(),
-        }});
-        return res.json({
-          ok: true,
-          delivery: 'firebase',
-          message: 'Password reset link sent. Check Inbox, Promotions and Spam folders.',
-        });
-      } catch (error) {
-        firebaseError = error;
-        console.warn('[Firebase reset]', error?.code || error?.message || error);
-      }
-    }
-
-    if (hasSmtpPasswordReset()) {
-      try {
-        await sendSmtpPasswordReset(email);
-        await dbCollection('auth_users').updateOne({ id: account.id }, { $set: {
-          firebase_recovery_enabled: false,
-          updated_at: new Date().toISOString(),
-        }});
-        return res.json({
-          ok: true,
-          delivery: 'smtp',
-          message: 'Password reset link sent by CCMMS email. Check Inbox, Promotions and Spam folders.',
-        });
-      } catch (error) {
-        console.error('[SMTP reset]', error?.code || error?.message || error);
-        if (!firebaseError) firebaseError = error;
-      }
-    }
-
-    if (firebaseError) {
+    if (!config.firebaseApiKey) {
       return res.status(503).json({
-        error: firebaseErrorMessage(firebaseError),
-        hint: 'You can also configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and MAIL_FROM on Render as a fallback.',
+        error: 'Firebase Forgot Password is not configured. Add FIREBASE_API_KEY in Render Environment.',
       });
     }
 
-    return res.status(503).json({
-      error: 'Password reset email is not configured. Add FIREBASE_API_KEY or SMTP settings on Render.',
-    });
+    try {
+      // Firebase is used only for the Forgot Password recovery flow. If the
+      // CCMMS account has never used recovery before, firebase.mjs creates a
+      // recovery-only Firebase Auth identity first and then asks Firebase to
+      // send its official PASSWORD_RESET email.
+      await sendFirebasePasswordReset(email);
+      await dbCollection('auth_users').updateOne({ id: account.id }, { $set: {
+        firebase_recovery_enabled: true,
+        updated_at: new Date().toISOString(),
+      }});
+      return res.json({
+        ok: true,
+        delivery: 'firebase',
+        message: 'Firebase password reset link sent. Check Inbox, Promotions and Spam folders.',
+      });
+    } catch (error) {
+      console.error('[Firebase forgot-password]', error?.code || error?.message || error);
+      return res.status(503).json({
+        error: firebaseErrorMessage(error),
+      });
+    }
   } catch (error) { next(error); }
 });
 
-authRouter.post('/reset-password', async (req, res, next) => {
-  try {
-    const token = String(req.body?.token || '').trim();
-    const newPassword = String(req.body?.newPassword || '');
-    if (!token) return res.status(400).json({ error: 'Reset token is missing.' });
-    if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
 
-    const email = await consumePasswordResetToken(token);
-    if (!email) return res.status(400).json({ error: 'This reset link is invalid, expired, or already used.' });
-
-    const account = await dbCollection('auth_users').findOne({ email });
-    if (!account) return res.status(400).json({ error: 'This reset link is no longer valid.' });
-
-    await dbCollection('auth_users').updateOne({ id: account.id }, { $set: {
-      password_hash: await bcrypt.hash(newPassword, 12),
-      firebase_recovery_enabled: false,
-      updated_at: new Date().toISOString(),
-    }});
-
-    return res.json({ ok: true, message: 'Password updated successfully. You can sign in now.' });
-  } catch (error) { next(error); }
-});
