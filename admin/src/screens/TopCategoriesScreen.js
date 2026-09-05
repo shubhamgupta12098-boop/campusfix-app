@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
-  MonitorWifi,
+  Wifi as MonitorWifi,
   MoreHorizontal,
   ShieldCheck,
   Zap,
