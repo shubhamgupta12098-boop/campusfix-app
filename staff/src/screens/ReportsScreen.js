@@ -227,8 +227,11 @@ export function ReportsScreen({ onNavigate }) {
 
   const report = useMemo(() => {
     const bounds = periodBounds(rangeDays);
-    const currentRows = filterByPeriod(complaints, bounds);
-    const previousRows = filterByPeriod(complaints, bounds, true);
+    const reportableComplaints = complaints.filter(
+      (row) => String(row.status || '').toLowerCase() !== 'rejected',
+    );
+    const currentRows = filterByPeriod(reportableComplaints, bounds);
+    const previousRows = filterByPeriod(reportableComplaints, bounds, true);
     const current = summarize(currentRows);
     const previous = summarize(previousRows);
 
@@ -270,7 +273,7 @@ export function ReportsScreen({ onNavigate }) {
     const now = new Date();
     const monthlyTrend = Array.from({ length: 6 }, (_, offset) => {
       const date = new Date(now.getFullYear(), now.getMonth() - (5 - offset), 1);
-      const value = complaints.filter((row) => {
+      const value = reportableComplaints.filter((row) => {
         const created = safeDate(row.created_at);
         return created && created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth();
       }).length;

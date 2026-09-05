@@ -183,8 +183,12 @@ export function cleanDoc(doc) {
 }
 
 const CATEGORIES = [
-  ['electrical', 'Electrical'], ['plumbing', 'Plumbing'], ['carpentry', 'Carpentry'], ['civil', 'Civil'],
-  ['cleaning', 'Cleaning'], ['internet', 'Internet / Wi-Fi'], ['ac', 'AC / HVAC'], ['other', 'Other'],
+  ['electrical', 'Electrical'],
+  ['plumbing', 'Plumbing'],
+  ['furniture', 'Furniture'],
+  ['it-network', 'IT / Network'],
+  ['cleanliness', 'Cleanliness'],
+  ['other', 'Other'],
 ].map(([id, name]) => ({ id, name }));
 
 const BUILDINGS = [

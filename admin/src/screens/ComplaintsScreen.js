@@ -31,7 +31,7 @@ function normaliseFilter(value) {
 }
 
 function matchesStatus(complaint, filter) {
-  if (filter === 'total') return true;
+  if (filter === 'total') return String(complaint.status || '').toLowerCase() !== 'rejected';
   if (filter === 'open') return OPEN_STATUSES.has(complaint.status);
   if (filter === 'in_progress') return PROGRESS_STATUSES.has(complaint.status);
   if (filter === 'closed') return CLOSED_STATUSES.has(complaint.status);
@@ -113,7 +113,7 @@ export function ComplaintsScreen({ initialFilter = 'total', onOpenComplaint, onF
   }, []);
 
   const counts = useMemo(() => ({
-    total: complaints.length,
+    total: complaints.filter((item) => matchesStatus(item, 'total')).length,
     open: complaints.filter((item) => matchesStatus(item, 'open')).length,
     in_progress: complaints.filter((item) => matchesStatus(item, 'in_progress')).length,
     closed: complaints.filter((item) => matchesStatus(item, 'closed')).length,

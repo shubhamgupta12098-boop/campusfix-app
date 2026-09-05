@@ -7956,3 +7956,49 @@ select option:hover { background: #159763 !important; color: #ffffff !important;
   .top-category-title-line h2 { font-size: 15px; }
   .top-category-title-line p { gap: 4px; font-size: 10px; }
 }
+
+/* Mobile dashboard stat cards: keep labels inside each card on narrow phones. */
+@media (max-width: 480px) {
+  .admin-mobile-stat-row .admin-reference-stat {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .admin-mobile-stat-row .admin-reference-stat > div {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .admin-mobile-stat-row .admin-reference-stat small {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+    word-break: normal !important;
+    line-height: 1.15 !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .admin-mobile-stat-row .admin-reference-stat {
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    gap: 6px !important;
+    padding: 8px 7px !important;
+  }
+
+  .admin-mobile-stat-row .admin-reference-stat-icon {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .admin-mobile-stat-row .admin-reference-stat-icon svg {
+    width: 19px !important;
+    height: 19px !important;
+  }
+
+  .admin-mobile-stat-row .admin-reference-stat small {
+    font-size: 8px !important;
+  }
+}

@@ -62,23 +62,27 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, unreadNotificatio
             setLoading(false);
         }
     };
+    const reportableComplaints = useMemo(
+        () => complaints.filter((c) => String(c.status || '').toLowerCase() !== 'rejected'),
+        [complaints],
+    );
     const stats = useMemo(() => {
         const now = new Date();
-        const total = complaints.length;
-        const open = complaints.filter((c) => ACTIVE_STATUSES.includes(c.status)).length;
-        const resolved = complaints.filter((c) => COMPLETED_STATUSES.includes(c.status)).length;
-        const overdue = complaints.filter((c) => c.expected_completion &&
+        const total = reportableComplaints.length;
+        const open = reportableComplaints.filter((c) => ACTIVE_STATUSES.includes(c.status)).length;
+        const resolved = reportableComplaints.filter((c) => COMPLETED_STATUSES.includes(c.status)).length;
+        const overdue = reportableComplaints.filter((c) => c.expected_completion &&
             new Date(c.expected_completion) < now &&
             !COMPLETED_STATUSES.includes(c.status)).length;
-        const emergency = complaints.filter((c) => c.priority === 'emergency' && !COMPLETED_STATUSES.includes(c.status)).length;
-        const unassigned = complaints.filter((c) => !c.assigned_to && ACTIVE_STATUSES.includes(c.status)).length;
+        const emergency = reportableComplaints.filter((c) => c.priority === 'emergency' && !COMPLETED_STATUSES.includes(c.status)).length;
+        const unassigned = reportableComplaints.filter((c) => !c.assigned_to && ACTIVE_STATUSES.includes(c.status)).length;
         return { total, open, resolved, overdue, emergency, unassigned };
-    }, [complaints]);
-    const recent = complaints.slice(0, isAdmin ? 7 : 5);
+    }, [reportableComplaints]);
+    const recent = reportableComplaints.slice(0, isAdmin ? 7 : 5);
     const categoryStats = useMemo(() => categories.map((cat) => ({
         ...cat,
-        count: complaints.filter((c) => c.category_id === cat.id).length,
-    })).sort((a, b) => b.count - a.count).slice(0, 5), [categories, complaints]);
+        count: reportableComplaints.filter((c) => c.category_id === cat.id).length,
+    })).sort((a, b) => b.count - a.count).slice(0, 5), [categories, reportableComplaints]);
     const staff = profiles.filter((p) => p.role === 'staff');
     const activeStaff = staff.filter((p) => p.is_active !== false).length;
     const todayLabel = new Intl.DateTimeFormat('en-IN', {
@@ -102,8 +106,8 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, unreadNotificatio
       </Card>
     </div>);
     if (isAdmin) {
-        const inProgress = complaints.filter((c) => ['assigned', 'in_progress', 'waiting_approval'].includes(c.status)).length;
-        const ratedComplaints = complaints.filter((c) => Number(c.feedback_rating) > 0);
+        const inProgress = reportableComplaints.filter((c) => ['assigned', 'in_progress', 'waiting_approval'].includes(c.status)).length;
+        const ratedComplaints = reportableComplaints.filter((c) => Number(c.feedback_rating) > 0);
         const averageRating = ratedComplaints.length
             ? (ratedComplaints.reduce((sum, c) => sum + Number(c.feedback_rating || 0), 0) / ratedComplaints.length).toFixed(1)
             : '—';

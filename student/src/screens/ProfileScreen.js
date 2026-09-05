@@ -146,16 +146,17 @@ export function ProfileScreen({ onNavigate }) {
         .slice(0, 2)
         .join('')
         .toUpperCase();
-    const total = complaints.length;
-    const resolved = complaints.filter((c) => c.status === 'resolved' || c.status === 'closed').length;
-    const open = complaints.filter((c) => !['closed', 'resolved', 'rejected'].includes(c.status)).length;
+    const reportableComplaints = complaints.filter((c) => String(c.status || '').toLowerCase() !== 'rejected');
+    const total = reportableComplaints.length;
+    const resolved = reportableComplaints.filter((c) => c.status === 'resolved' || c.status === 'closed').length;
+    const open = reportableComplaints.filter((c) => !['closed', 'resolved'].includes(c.status)).length;
     const avgRating = (() => {
-        const rated = complaints.filter((c) => c.feedback_rating);
+        const rated = reportableComplaints.filter((c) => c.feedback_rating);
         if (rated.length === 0)
             return 0;
         return (rated.reduce((sum, c) => sum + (c.feedback_rating || 0), 0) / rated.length).toFixed(1);
     })();
-    const recentComplaints = complaints.slice(0, 5);
+    const recentComplaints = reportableComplaints.slice(0, 5);
     if (role === 'admin') {
         const openEditor = () => {
             setSaveError(null);

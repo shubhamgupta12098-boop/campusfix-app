@@ -4,6 +4,7 @@ import {
   Wifi as MonitorWifi,
   MoreHorizontal,
   ShieldCheck,
+  Wrench,
   Zap,
 } from 'lucide-react';
 import { localData } from '@/lib/localDataClient';
@@ -19,32 +20,40 @@ const GROUPS = [
     matches: (value) => /electrical|electric|power|light|lighting/.test(value),
   },
   {
-    id: 'facilities',
-    name: 'Facilities',
+    id: 'plumbing',
+    name: 'Plumbing',
+    color: '#2f8df4',
+    tone: 'blue',
+    icon: Wrench,
+    matches: (value) => /plumbing|plumb|water|leak|pipe/.test(value),
+  },
+  {
+    id: 'furniture',
+    name: 'Furniture',
     color: '#9748f2',
     tone: 'purple',
     icon: Building2,
-    matches: (value) => /facility|plumb|carpent|civil|clean|hvac|\bac\b|building|furniture|water/.test(value),
+    matches: (value) => /furniture|carpentry|carpent|chair|table|desk|door|window/.test(value),
   },
   {
-    id: 'safety',
-    name: 'Safety & Security',
-    color: '#2f8df4',
-    tone: 'blue',
-    icon: ShieldCheck,
-    matches: (value) => /safety|security|fire|hazard|emergency/.test(value),
-  },
-  {
-    id: 'network',
-    name: 'IT & Network',
+    id: 'it-network',
+    name: 'IT / Network',
     color: '#31d46f',
     tone: 'green',
     icon: MonitorWifi,
-    matches: (value) => /internet|wi-?fi|network|\bit\b|computer|system/.test(value),
+    matches: (value) => /it-network|it \/ network|internet|wi-?fi|network|\bit\b|computer|system|projector/.test(value),
+  },
+  {
+    id: 'cleanliness',
+    name: 'Cleanliness',
+    color: '#20dbea',
+    tone: 'cyan',
+    icon: ShieldCheck,
+    matches: (value) => /cleanliness|cleaning|clean|sanitation|garbage|waste/.test(value),
   },
   {
     id: 'other',
-    name: 'Others',
+    name: 'Other',
     color: '#ff982d',
     tone: 'orange',
     icon: MoreHorizontal,
@@ -126,12 +135,16 @@ export function TopCategoriesScreen() {
   const report = useMemo(() => {
     const end = endOfToday();
     const requestedStart = beginningOfRange(rangeDays);
+    // Rejected complaints are not genuine, so they are excluded from analytics.
+    const reportableComplaints = complaints.filter(
+      (row) => String(row.status || '').toLowerCase() !== 'rejected',
+    );
     const periodRows = requestedStart
-      ? complaints.filter((row) => {
+      ? reportableComplaints.filter((row) => {
           const created = new Date(row.created_at);
           return !Number.isNaN(created.getTime()) && created >= requestedStart && created <= end;
         })
-      : complaints;
+      : reportableComplaints;
 
     const grouped = GROUPS.map((group) => ({ ...group, count: 0 }));
     periodRows.forEach((row) => {

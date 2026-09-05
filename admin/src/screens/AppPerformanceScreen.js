@@ -52,7 +52,7 @@ export function AppPerformanceScreen() {
       ? Math.max(96, Math.min(100, Math.round((notifications.filter((item) => item.delivery_status !== 'failed').length / notifications.length) * 100)))
       : 98;
     return {
-      handled: handled || complaints.length,
+      handled: handled || complaints.filter((item) => String(item.status || '').toLowerCase() !== 'rejected').length,
       avgRating,
       activeUsers,
       notificationDelivery: delivered,

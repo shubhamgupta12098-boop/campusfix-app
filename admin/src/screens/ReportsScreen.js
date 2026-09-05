@@ -35,7 +35,7 @@ const defaultAdminDates = () => {
 
 function statusBucket(status) {
   const value = String(status || '').toLowerCase();
-  if (['closed', 'resolved', 'completed', 'rejected'].includes(value)) return 'closed';
+  if (['closed', 'resolved', 'completed'].includes(value)) return 'closed';
   if (['in_progress', 'waiting_approval', 'awaiting_approval', 'rework_required'].includes(value)) return 'in_progress';
   return 'open';
 }
@@ -436,7 +436,9 @@ export function ReportsScreen({ onNavigate }) {
   const report = useMemo(() => {
     const isAdmin = profile?.role === 'admin';
     const bounds = isAdmin ? dateBounds(adminStartDate, adminEndDate) : periodBounds(rangeDays);
-    const periodRows = filterByPeriod(complaints, bounds);
+    const periodRows = filterByPeriod(complaints, bounds).filter(
+      (row) => String(row.status || '').toLowerCase() !== 'rejected',
+    );
     const counts = countStatuses(periodRows);
     const categoriesForView = categoryRows(categories, periodRows);
     const staffForView = staffRows(technicians, periodRows);
