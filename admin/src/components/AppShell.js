@@ -279,9 +279,18 @@ export const AppShell = () => {
                   <Menu size={22}/>
                 </button>
               )}
-              <div className="admin-topbar-copy">
-                <p>ADMIN CONSOLE</p>
-                <h1>{adminPageTitle}</h1>
+              <div className={`admin-topbar-copy ${screen === 'reports' ? 'admin-reports-topbar-brand' : ''}`}>
+                {screen === 'reports' ? (
+                  <>
+                    <span className="admin-reports-brand-mark"><ShieldCheck size={21} fill="currentColor"/></span>
+                    <h1><span>CCMMS</span> <em>Admin</em></h1>
+                  </>
+                ) : (
+                  <>
+                    <p>ADMIN CONSOLE</p>
+                    <h1>{adminPageTitle}</h1>
+                  </>
+                )}
               </div>
               <div className="campus-topbar-actions admin-topbar-actions">
                 <label className="admin-global-search">
@@ -302,7 +311,7 @@ export const AppShell = () => {
                     {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
                   </button>
                 )}
-                {screen !== 'notifications' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
+                {screen !== 'notifications' && screen !== 'reports' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
               </div>
             </>
           ) : (

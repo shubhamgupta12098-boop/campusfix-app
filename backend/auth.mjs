@@ -168,32 +168,16 @@ authRouter.post('/forgot-password', async (req, res, next) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'Registered email is required.' });
     if (!forgotRateLimit(req, email)) return res.status(429).json({ error: 'Too many reset requests. Please wait and try again.' });
-    if (!config.firebaseApiKey) {
-      return res.status(503).json({ error: 'Password recovery is temporarily unavailable. Please contact the administrator.' });
-    }
-
+    if (!config.firebaseApiKey) return res.status(503).json({ error: 'Forgot Password is not configured. Add FIREBASE_API_KEY on Render.' });
     const account = await dbCollection('auth_users').findOne({ email });
     if (account) {
-      await dbCollection('auth_users').updateOne(
-        { id: account.id },
-        { $set: { firebase_recovery_enabled: true, updated_at: new Date().toISOString() } },
-      );
-
-      try {
-        await sendFirebasePasswordReset(email);
-      } catch (error) {
-        await dbCollection('auth_users').updateOne(
-          { id: account.id },
-          { $set: { firebase_recovery_enabled: false, updated_at: new Date().toISOString() } },
-        );
-        console.error('[Password recovery]', error?.message || error);
-        return res.status(502).json({ error: 'Unable to send the reset email right now. Please try again later.' });
+      await dbCollection('auth_users').updateOne({ id: account.id }, { $set: { firebase_recovery_enabled: true, updated_at: new Date().toISOString() } });
+      try { await sendFirebasePasswordReset(email); }
+      catch (error) {
+        await dbCollection('auth_users').updateOne({ id: account.id }, { $set: { firebase_recovery_enabled: false, updated_at: new Date().toISOString() } });
+        throw error;
       }
     }
-
-    return res.json({
-      ok: true,
-      message: 'If this email is registered, a password reset link has been sent. Check your inbox and spam folder.',
-    });
+    res.json({ ok: true, message: 'If this email is registered, a Firebase reset link has been sent. Check Inbox and Spam.' });
   } catch (error) { next(error); }
 });

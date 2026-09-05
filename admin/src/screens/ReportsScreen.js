@@ -3,23 +3,21 @@ import { localData } from '@/lib/localDataClient';
 import { useAuthStore } from '@/lib/auth';
 import { Spinner } from '@/components/ui';
 import { formatDate } from '@/lib/constants';
-import { downloadTextFile, exportPageAsPdf } from '@/lib/download';
+import { downloadTextFile, shareTextFile } from '@/lib/download';
 import {
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
-  ClipboardList,
   Download,
+  Eye,
   FileSpreadsheet,
   FileText,
-  Info,
-  MessageCircle,
   RefreshCw,
+  Send,
   Star,
-  Wrench,
+  TrendingUp,
 } from 'lucide-react';
 
-const PALETTE = ['#7c3aed', '#2f80ed', '#35b768', '#ff8a1f', '#ec4899', '#20c8e7'];
+const PALETTE = ['#20d5e8', '#2f80ed', '#8b4cf2', '#b743df', '#ec4899', '#35b768'];
 
 const safeDate = (value) => (value ? new Date(value) : null);
 
@@ -112,20 +110,26 @@ function staffRows(technicians, rows) {
     .map((technician) => {
       const assigned = rows.filter((row) => row.assigned_to === technician.id);
       const closed = assigned.filter((row) => statusBucket(row.status) === 'closed').length;
+      const ratings = assigned
+        .map((row) => Number(row.feedback_rating))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const rating = ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null;
       return {
         ...technician,
         assigned: assigned.length,
         closed,
         rate: assigned.length ? Math.round((closed / assigned.length) * 100) : 0,
+        rating,
+        ratingCount: ratings.length,
       };
     })
     .filter((row) => row.assigned > 0)
-    .sort((a, b) => b.rate - a.rate || b.closed - a.closed);
+    .sort((a, b) => b.rate - a.rate || (b.rating || 0) - (a.rating || 0) || b.closed - a.closed);
 }
 
-function monthlyTrend(rows, endDate) {
+function monthlyTrend(rows, anchorDate) {
   const monthFormatter = new Intl.DateTimeFormat('en', { month: 'short' });
-  const anchor = endDate && !Number.isNaN(endDate.getTime()) ? endDate : new Date();
+  const anchor = anchorDate && !Number.isNaN(anchorDate.getTime()) ? anchorDate : new Date();
   return Array.from({ length: 6 }, (_, offset) => {
     const date = new Date(anchor.getFullYear(), anchor.getMonth() - (5 - offset), 1);
     const value = rows.filter((row) => {
@@ -134,6 +138,123 @@ function monthlyTrend(rows, endDate) {
     }).length;
     return { label: monthFormatter.format(date), value };
   });
+}
+
+function periodTrend(rows, bounds) {
+  if (!bounds.start || !bounds.end) return monthlyTrend(rows, bounds.end || new Date());
+  const spanMs = Math.max(1, bounds.end.getTime() - bounds.start.getTime());
+  const spanDays = spanMs / 86400000;
+  if (spanDays > 75) return monthlyTrend(rows, bounds.end);
+
+  const count = 6;
+  const bucketMs = spanMs / count;
+  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+  return Array.from({ length: count }, (_, index) => {
+    const startMs = bounds.start.getTime() + bucketMs * index;
+    const endMs = index === count - 1 ? bounds.end.getTime() + 1 : bounds.start.getTime() + bucketMs * (index + 1);
+    const value = rows.filter((row) => {
+      const created = safeDate(row.created_at);
+      if (!created || Number.isNaN(created.getTime())) return false;
+      const time = created.getTime();
+      return time >= startMs && time < endMs;
+    }).length;
+    return { label: formatter.format(new Date(startMs)), value };
+  });
+}
+
+function csvEscape(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function rowsToCsv(rows) {
+  return rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+}
+
+function detailedReportCsv(report) {
+  const rows = [['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Assigned Staff', 'Created', 'Closed Date', 'Rating']];
+  report.periodRows.forEach((complaint) => {
+    rows.push([
+      complaint.complaint_no,
+      complaint.title,
+      complaint.complaint_categories?.name || '',
+      complaint.priority,
+      displayStatus(complaint.status),
+      complaint.profiles?.full_name || '',
+      formatDate(complaint.created_at),
+      complaint.resolved_at ? formatDate(complaint.resolved_at) : '',
+      complaint.feedback_rating || '',
+    ]);
+  });
+  return rowsToCsv(rows);
+}
+
+function trendReportCsv(report) {
+  return rowsToCsv([
+    ['Period', 'Complaints'],
+    ...report.trend.map((point) => [point.label, point.value]),
+  ]);
+}
+
+function staffReportCsv(report) {
+  return rowsToCsv([
+    ['Staff Member', 'Assigned', 'Closed', 'Completion %', 'Average Rating', 'Ratings Received'],
+    ...report.byTechnician.map((row) => [
+      row.full_name,
+      row.assigned,
+      row.closed,
+      row.rate,
+      row.rating ? row.rating.toFixed(1) : '',
+      row.ratingCount,
+    ]),
+  ]);
+}
+
+
+function fullReportCsv(report) {
+  const rows = [
+    ['CCMMS Reports & Analytics'],
+    ['Date Range', report.rangeLabel],
+    [],
+    ['Summary'],
+    ['Total Complaints', 'Open', 'In Progress', 'Closed', 'Completion %', 'Average Rating'],
+    [report.counts.total, report.counts.open, report.counts.in_progress, report.counts.closed, report.completionRate, report.avgRating],
+    [],
+    ['Top Categories'],
+    ['Category', 'Complaints', 'Share %'],
+    ...report.byCategory.map((row) => [row.name, row.total, report.counts.total ? Math.round((row.total / report.counts.total) * 100) : 0]),
+    [],
+    ['Complaint Trend'],
+    ['Period', 'Complaints'],
+    ...report.trend.map((point) => [point.label, point.value]),
+    [],
+    ['Staff Performance'],
+    ['Staff Member', 'Assigned', 'Closed', 'Completion %', 'Average Rating', 'Ratings Received'],
+    ...report.byTechnician.map((row) => [row.full_name, row.assigned, row.closed, row.rate, row.rating ? row.rating.toFixed(1) : '', row.ratingCount]),
+    [],
+    ['Complaint Details'],
+    ['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Assigned Staff', 'Created', 'Closed Date', 'Rating'],
+    ...report.periodRows.map((complaint) => [
+      complaint.complaint_no,
+      complaint.title,
+      complaint.complaint_categories?.name || '',
+      complaint.priority,
+      displayStatus(complaint.status),
+      complaint.profiles?.full_name || '',
+      formatDate(complaint.created_at),
+      complaint.resolved_at ? formatDate(complaint.resolved_at) : '',
+      complaint.feedback_rating || '',
+    ]),
+  ];
+  return rowsToCsv(rows);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function DonutChart({ items, total, admin = false }) {
@@ -148,20 +269,19 @@ function DonutChart({ items, total, admin = false }) {
 
   if (admin) {
     return (
-      <div className="admin-analytics-donut-wrap">
-        <div className="admin-analytics-donut" style={{ background }}>
-          <div><strong>{total}</strong><span>Total</span></div>
+      <div className="admin-report-category-layout">
+        <div className="admin-report-category-donut" style={{ background }}>
+          <span />
         </div>
-        <div className="admin-analytics-legend">
-          {items.slice(0, 4).map((item) => (
+        <div className="admin-report-category-legend">
+          {items.slice(0, 3).map((item) => (
             <div key={item.id || item.name}>
-              <span style={{ backgroundColor: item.color }}/>
-              <b>{item.name}</b>
+              <i style={{ backgroundColor: item.color }}/>
+              <span>{item.name}</span>
               <strong>{total ? Math.round((item.total / total) * 100) : 0}%</strong>
-              <em>({item.total})</em>
             </div>
           ))}
-          {!items.length && <p>No category data in this range</p>}
+          {!items.length && <p>No category data</p>}
         </div>
       </div>
     );
@@ -195,16 +315,18 @@ function StaffBars({ rows, admin = false }) {
   const topRows = rows.slice(0, 5);
   if (admin) {
     return (
-      <div className="admin-analytics-staff-bars">
-        {!topRows.length && <p className="admin-analytics-empty">No staff performance data in this range</p>}
+      <div className="admin-reference-staff-bars">
+        {!topRows.length && <p className="admin-reference-empty">No staff performance data in this range</p>}
         {topRows.map((row) => (
-          <div key={row.id} className="admin-analytics-staff-row">
+          <div key={row.id} className="admin-reference-staff-row">
             <span>{row.full_name}</span>
-            <div><i style={{ width: `${row.rate}%` }}/></div>
+            <div className="admin-reference-staff-track"><i style={{ width: `${row.rate}%` }}/></div>
             <strong>{row.rate}%</strong>
+            <em title={`${row.ratingCount} rating${row.ratingCount === 1 ? '' : 's'}`}>
+              <Star size={10} fill="currentColor"/>{row.rating ? row.rating.toFixed(1) : '—'}
+            </em>
           </div>
         ))}
-        {!!topRows.length && <div className="admin-analytics-axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>}
       </div>
     );
   }
@@ -213,12 +335,13 @@ function StaffBars({ rows, admin = false }) {
     <div className="space-y-3 pt-2">
       {!topRows.length && <p className="text-sm text-slate-400 py-12 text-center">No staff performance data yet</p>}
       {topRows.map((row, index) => (
-        <div key={row.id} className="grid grid-cols-[112px_1fr_38px] items-center gap-2 text-xs">
+        <div key={row.id} className="grid grid-cols-[112px_1fr_42px_46px] items-center gap-2 text-xs">
           <span className="font-semibold text-slate-700 truncate">{row.full_name}</span>
           <div className="h-4 rounded-sm bg-slate-100 overflow-hidden">
             <div className="h-full rounded-sm" style={{ width: `${row.rate}%`, backgroundColor: PALETTE[index % PALETTE.length] }}/>
           </div>
           <span className="font-bold text-slate-800 text-right">{row.rate}%</span>
+          <span className="font-bold text-amber-500 text-right">★ {row.rating ? row.rating.toFixed(1) : '—'}</span>
         </div>
       ))}
     </div>
@@ -226,43 +349,49 @@ function StaffBars({ rows, admin = false }) {
 }
 
 function TrendLine({ points, admin = false }) {
-  const width = 360;
-  const height = 150;
-  const padX = 28;
-  const padTop = 18;
+  const width = 500;
+  const height = 145;
+  const padX = 38;
+  const padTop = 16;
   const padBottom = 30;
   const maxValue = Math.max(...points.map((point) => point.value), 1);
-  const roundedMax = Math.max(4, Math.ceil(maxValue / 4) * 4);
+  const niceMax = Math.max(4, Math.ceil(maxValue / 4) * 4);
   const coordinates = points.map((point, index) => {
-    const x = points.length === 1 ? width / 2 : padX + (index * (width - padX * 2)) / (points.length - 1);
-    const y = padTop + (1 - point.value / roundedMax) * (height - padTop - padBottom);
+    const x = points.length === 1 ? width / 2 : padX + (index * (width - padX - 10)) / (points.length - 1);
+    const y = padTop + (1 - point.value / niceMax) * (height - padTop - padBottom);
     return { ...point, x, y };
   });
   const path = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
   const areaPath = coordinates.length ? `${path} L ${coordinates.at(-1).x} ${height - padBottom} L ${coordinates[0].x} ${height - padBottom} Z` : '';
-  const gridColor = admin ? '#263949' : '#e8edf3';
-  const textColor = admin ? '#aeb8c2' : '#64748b';
-  const stroke = admin ? '#8b4cf2' : '#6d40d8';
+  const gridColor = admin ? '#1d2a38' : '#e8edf3';
+  const textColor = admin ? '#d7dbe1' : '#64748b';
+  const stroke = admin ? '#9b55f6' : '#6d40d8';
 
   return (
-    <div className={admin ? 'admin-analytics-trend' : 'h-[172px] w-full overflow-hidden'}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" role="img" aria-label="Monthly complaints trend">
+    <div className={admin ? 'admin-reference-trend' : 'h-[172px] w-full overflow-hidden'}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" role="img" aria-label="Complaint trend">
         <defs>
-          <linearGradient id={admin ? 'adminTrendFill' : 'trendFill'} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={admin ? '.28' : '.12'}/>
+          <linearGradient id={admin ? 'adminReferenceTrendFill' : 'trendFill'} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity={admin ? '.24' : '.12'}/>
             <stop offset="100%" stopColor={stroke} stopOpacity="0"/>
           </linearGradient>
         </defs>
-        {[0, 0.25, 0.5, 0.75, 1].map((line) => {
+        {[0, .25, .5, .75, 1].map((line) => {
           const y = padTop + (1 - line) * (height - padTop - padBottom);
-          return <line key={line} x1={padX} x2={width - 8} y1={y} y2={y} stroke={gridColor} strokeDasharray="4 5"/>;
+          const labelValue = Math.round(niceMax * line);
+          return (
+            <g key={line}>
+              <line x1={padX} x2={width - 8} y1={y} y2={y} stroke={gridColor} strokeDasharray="4 4"/>
+              <text x={padX - 10} y={y + 3} textAnchor="end" fontSize="9" fill={textColor}>{labelValue}</text>
+            </g>
+          );
         })}
-        {areaPath && <path d={areaPath} fill={`url(#${admin ? 'adminTrendFill' : 'trendFill'})`}/>}        
+        {areaPath && <path d={areaPath} fill={`url(#${admin ? 'adminReferenceTrendFill' : 'trendFill'})`}/>}        
         <path d={path} fill="none" stroke={stroke} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
-        {coordinates.map((point) => (
-          <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="4.5" fill={stroke} stroke={admin ? '#d8c5ff' : 'white'} strokeWidth="1.8"/>
-            <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill={textColor} fontWeight="600">{point.label}</text>
+        {coordinates.map((point, index) => (
+          <g key={`${point.label}-${index}`}>
+            <circle cx={point.x} cy={point.y} r="4" fill={stroke} stroke={admin ? '#d8c2ff' : 'white'} strokeWidth="1.5"/>
+            <text x={point.x} y={height - 7} textAnchor="middle" fontSize="9" fill={textColor}>{point.label}</text>
           </g>
         ))}
       </svg>
@@ -270,34 +399,18 @@ function TrendLine({ points, admin = false }) {
   );
 }
 
-function AdminStatusButton({ id, activeStatus, onSelect, icon: Icon, label, value, tone }) {
-  const active = activeStatus === id;
-  return (
-    <button
-      type="button"
-      className={`admin-report-status-button ${tone} ${active ? 'is-active' : ''}`}
-      onClick={() => onSelect(id)}
-      aria-pressed={active}
-    >
-      <span><Icon/></span>
-      <div><small>{label}</small><strong>{value}</strong></div>
-    </button>
-  );
-}
-
-export function ReportsScreen({ onNavigate }) {
+export function ReportsScreen() {
   const { profile } = useAuthStore();
   const initialDates = useMemo(() => defaultAdminDates(), []);
   const [complaints, setComplaints] = useState([]);
   const [categories, setCategories] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
   const [rangeDays, setRangeDays] = useState('30');
   const [adminStartDate, setAdminStartDate] = useState(initialDates.start);
   const [adminEndDate, setAdminEndDate] = useState(initialDates.end);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [activeStatus, setActiveStatus] = useState('all');
+  const [busyAction, setBusyAction] = useState('');
 
   useEffect(() => { void load(); }, []);
 
@@ -325,54 +438,125 @@ export function ReportsScreen({ onNavigate }) {
     const bounds = isAdmin ? dateBounds(adminStartDate, adminEndDate) : periodBounds(rangeDays);
     const periodRows = filterByPeriod(complaints, bounds);
     const counts = countStatuses(periodRows);
-    const filteredRows = isAdmin && activeStatus !== 'all'
-      ? periodRows.filter((row) => statusBucket(row.status) === activeStatus)
-      : periodRows;
-    const categoriesForView = categoryRows(categories, filteredRows);
+    const categoriesForView = categoryRows(categories, periodRows);
     const staffForView = staffRows(technicians, periodRows);
-    const trend = monthlyTrend(filteredRows, bounds.end || new Date());
+    const trend = periodTrend(periodRows, bounds);
     const rated = periodRows.filter((row) => Number(row.feedback_rating) > 0);
-    const avgRating = rated.length
-      ? (rated.reduce((sum, row) => sum + Number(row.feedback_rating || 0), 0) / rated.length).toFixed(1)
-      : '—';
+    const avgRatingNumber = rated.length
+      ? rated.reduce((sum, row) => sum + Number(row.feedback_rating || 0), 0) / rated.length
+      : null;
+    const completionRate = counts.total ? Math.round((counts.closed / counts.total) * 100) : 0;
 
     return {
       bounds,
       periodRows,
-      filteredRows,
       counts,
       byCategory: categoriesForView,
       byTechnician: staffForView,
-      monthlyTrend: trend,
-      avgRating,
+      trend,
+      avgRatingNumber,
+      avgRating: avgRatingNumber ? avgRatingNumber.toFixed(1) : '—',
+      ratingCount: rated.length,
+      completionRate,
       rangeLabel: rangeLabel(bounds),
     };
-  }, [complaints, categories, technicians, profile?.role, rangeDays, adminStartDate, adminEndDate, activeStatus]);
+  }, [complaints, categories, technicians, profile?.role, rangeDays, adminStartDate, adminEndDate]);
 
-  const exportCSV = async () => {
-    const rows = [['Complaint No', 'Title', 'Category', 'Priority', 'Status', 'Created', 'Closed Date', 'Rating']];
-    report.filteredRows.forEach((complaint) => {
-      rows.push([
-        complaint.complaint_no,
-        complaint.title,
-        complaint.complaint_categories?.name || '',
-        complaint.priority,
-        displayStatus(complaint.status),
-        formatDate(complaint.created_at),
-        complaint.resolved_at ? formatDate(complaint.resolved_at) : '',
-        complaint.feedback_rating?.toString() || '',
-      ]);
-    });
-    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    setExporting(true);
+  const exportDefinitions = useMemo(() => ({
+    full: {
+      title: 'CCMMS Reports & Analytics',
+      description: 'Full analytics summary, staff ratings, trend and complaint details',
+      filename: `campuscare-report-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: fullReportCsv(report),
+    },
+    maintenance: {
+      title: 'Monthly Maintenance Report',
+      description: 'Complaint details, status, assignment and ratings',
+      filename: `monthly-maintenance-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: detailedReportCsv(report),
+    },
+    trend: {
+      title: 'Complaint Trend',
+      description: 'Complaint volume across the selected report period',
+      filename: `complaint-trend-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: trendReportCsv(report),
+    },
+    staff: {
+      title: 'Staff Workload',
+      description: 'Assigned work, completion score and staff ratings',
+      filename: `staff-workload-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: staffReportCsv(report),
+    },
+  }), [report]);
+
+  const summaryText = useMemo(() => (
+    `CCMMS Reports & Analytics — ${report.rangeLabel}. ` +
+    `${report.counts.total} complaints: ${report.counts.open} open, ${report.counts.in_progress} in progress, ` +
+    `${report.counts.closed} closed. Average rating ${report.avgRating}/5. Completion ${report.completionRate}%.`
+  ), [report]);
+
+  const handleExport = async (type = 'full') => {
+    const item = exportDefinitions[type] || exportDefinitions.full;
+    setBusyAction(`export-${type}`);
     try {
-      await downloadTextFile(`campusfix-report-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv');
+      await downloadTextFile(item.filename, item.csv, 'text/csv;charset=utf-8');
     } catch (error) {
-      console.error('CSV export failed:', error);
+      console.error('Report export failed:', error);
       alert('Could not export the report. Please try again.');
     } finally {
-      setExporting(false);
+      setBusyAction('');
     }
+  };
+
+  const handleSend = async (type = 'full') => {
+    const item = exportDefinitions[type] || exportDefinitions.full;
+    setBusyAction(`send-${type}`);
+    try {
+      await shareTextFile({
+        filename: item.filename,
+        content: item.csv,
+        mimeType: 'text/csv;charset=utf-8',
+        title: item.title,
+        text: summaryText,
+      });
+    } catch (error) {
+      console.error('Report send failed:', error);
+      alert('Could not send the report. Please try again.');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const openPrintableReport = () => {
+    const win = window.open('', '_blank', 'width=920,height=760');
+    if (!win) {
+      alert('Please allow pop-ups to preview/print this report.');
+      return;
+    }
+    win.opener = null;
+    const categoryRowsHtml = report.byCategory.slice(0, 8).map((row) => (
+      `<tr><td>${escapeHtml(row.name)}</td><td>${row.total}</td><td>${report.counts.total ? Math.round((row.total / report.counts.total) * 100) : 0}%</td></tr>`
+    )).join('');
+    const staffRowsHtml = report.byTechnician.slice(0, 12).map((row) => (
+      `<tr><td>${escapeHtml(row.full_name)}</td><td>${row.assigned}</td><td>${row.closed}</td><td>${row.rate}%</td><td>${row.rating ? row.rating.toFixed(1) : '—'}/5</td></tr>`
+    )).join('');
+
+    win.document.write(`<!doctype html><html><head><title>CCMMS Report</title><style>
+      *{box-sizing:border-box}body{margin:0;padding:34px;font:14px/1.45 Arial,sans-serif;color:#111827;background:#fff}
+      header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:3px solid #7c3aed;padding-bottom:18px;margin-bottom:24px}
+      h1{margin:0;font-size:30px}header p{margin:5px 0 0;color:#6b7280}.brand{font-weight:800;color:#7c3aed}
+      .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:18px 0}.stat{border:1px solid #e5e7eb;border-radius:10px;padding:12px}.stat b{display:block;font-size:22px;margin-top:4px}
+      h2{font-size:18px;margin:26px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:9px;text-align:left}th{background:#f5f3ff}
+      .note{margin-top:28px;color:#6b7280;font-size:12px}@media print{body{padding:0}.no-print{display:none!important}}
+    </style></head><body>
+      <header><div><div class="brand">CCMMS Admin</div><h1>Reports &amp; Analytics</h1><p>${escapeHtml(report.rangeLabel)}</p></div><button class="no-print" onclick="window.print()">Print / Save PDF</button></header>
+      <div class="stats"><div class="stat">Total<b>${report.counts.total}</b></div><div class="stat">Open<b>${report.counts.open}</b></div><div class="stat">In Progress<b>${report.counts.in_progress}</b></div><div class="stat">Closed<b>${report.counts.closed}</b></div><div class="stat">Avg Rating<b>${escapeHtml(report.avgRating)}/5</b></div></div>
+      <h2>Top Categories</h2><table><thead><tr><th>Category</th><th>Complaints</th><th>Share</th></tr></thead><tbody>${categoryRowsHtml || '<tr><td colspan="3">No category data</td></tr>'}</tbody></table>
+      <h2>Staff Performance</h2><table><thead><tr><th>Staff</th><th>Assigned</th><th>Closed</th><th>Completion</th><th>Rating</th></tr></thead><tbody>${staffRowsHtml || '<tr><td colspan="5">No staff data</td></tr>'}</tbody></table>
+      <p class="note">Generated from live CCMMS complaint data for the selected date range.</p>
+    </body></html>`);
+    win.document.close();
+    win.focus();
   };
 
   const resetAdminDates = () => {
@@ -384,22 +568,37 @@ export function ReportsScreen({ onNavigate }) {
   if (loading) return <Spinner/>;
 
   if (profile?.role === 'admin') {
-    const statusName = activeStatus === 'all' ? 'All complaints' : activeStatus === 'in_progress' ? 'In Progress' : activeStatus[0].toUpperCase() + activeStatus.slice(1);
+    const reportRows = [
+      ['maintenance', exportDefinitions.maintenance],
+      ['trend', exportDefinitions.trend],
+      ['staff', exportDefinitions.staff],
+    ];
 
     return (
-      <div className="admin-screen admin-reports-screen admin-analytics-v2">
-        <section className="admin-report-date-shell">
-          <button type="button" className="admin-report-date-trigger" onClick={() => setCalendarOpen((value) => !value)} aria-expanded={calendarOpen}>
+      <div className="admin-screen admin-reports-screen admin-report-reference">
+        <div className="admin-reference-report-heading">
+          <h1>Reports &amp; Analytics</h1>
+        </div>
+
+        <section className="admin-reference-date-shell">
+          <button type="button" className="admin-reference-date-trigger" onClick={() => setCalendarOpen((value) => !value)} aria-expanded={calendarOpen}>
             <CalendarDays/>
-            <span><small>Date Range</small><strong>{report.rangeLabel}</strong></span>
+            <strong>{report.rangeLabel}</strong>
             <ChevronDown className={calendarOpen ? 'is-open' : ''}/>
           </button>
           {calendarOpen && (
-            <div className="admin-report-calendar-panel">
+            <div className="admin-reference-calendar-panel">
               <label>From<input type="date" value={adminStartDate} max={adminEndDate || undefined} onChange={(event) => setAdminStartDate(event.target.value)}/></label>
               <label>To<input type="date" value={adminEndDate} min={adminStartDate || undefined} onChange={(event) => setAdminEndDate(event.target.value)}/></label>
               <div>
-                <button type="button" onClick={resetAdminDates}>Last 30 days</button>
+                <button type="button" onClick={() => {
+                  const end = new Date();
+                  const start = new Date(end);
+                  start.setDate(start.getDate() - 6);
+                  setAdminStartDate(toInputDate(start));
+                  setAdminEndDate(toInputDate(end));
+                }}>7 days</button>
+                <button type="button" onClick={resetAdminDates}>30 days</button>
                 <button type="button" onClick={() => { setAdminStartDate(''); setAdminEndDate(''); }}>All time</button>
                 <button type="button" className="primary" onClick={() => setCalendarOpen(false)}>Done</button>
               </div>
@@ -407,74 +606,73 @@ export function ReportsScreen({ onNavigate }) {
           )}
         </section>
 
-        <div className="admin-report-status-grid" aria-label="Complaint status filters">
-          <AdminStatusButton id="all" activeStatus={activeStatus} onSelect={setActiveStatus} icon={ClipboardList} label="Total Complaints" value={report.counts.total} tone="total"/>
-          <AdminStatusButton id="open" activeStatus={activeStatus} onSelect={setActiveStatus} icon={MessageCircle} label="Open" value={report.counts.open} tone="open"/>
-          <AdminStatusButton id="in_progress" activeStatus={activeStatus} onSelect={setActiveStatus} icon={Wrench} label="In Progress" value={report.counts.in_progress} tone="progress"/>
-          <AdminStatusButton id="closed" activeStatus={activeStatus} onSelect={setActiveStatus} icon={CheckCircle2} label="Closed" value={report.counts.closed} tone="closed"/>
-        </div>
-        <p className="admin-report-filter-help">Tap a status to filter complaint charts · <strong>{statusName}</strong> ({report.filteredRows.length})</p>
-
-        <div className="admin-report-chart-grid">
-          <section className="admin-analytics-card">
-            <h2>Complaints by Category <Info/></h2>
-            <DonutChart items={report.byCategory} total={report.filteredRows.length} admin/>
-            <p>Total Complaints: <strong>{report.filteredRows.length}</strong></p>
+        <div className="admin-reference-top-grid">
+          <section className="admin-reference-card admin-reference-categories-card">
+            <h2>Top Categories</h2>
+            <DonutChart items={report.byCategory} total={report.counts.total} admin/>
           </section>
 
-          <section className="admin-analytics-card">
-            <h2>Monthly Trend <Info/></h2>
-            <TrendLine points={report.monthlyTrend} admin/>
-            <p>Complaints Over Time</p>
+          <section className="admin-reference-card admin-reference-rating-card">
+            <h2>Staff Performance</h2>
+            <span>Average Rating</span>
+            <div className="admin-reference-rating-value"><Star fill="currentColor"/><strong>{report.avgRating}</strong><b>/5</b></div>
+            <p><TrendingUp/> {report.completionRate}% <span>completion</span></p>
+            <small>{report.ratingCount} feedback rating{report.ratingCount === 1 ? '' : 's'}</small>
           </section>
         </div>
 
-        <section className="admin-analytics-card admin-staff-performance-card">
-          <h2>Staff Performance <Info/></h2>
-          <div className="admin-staff-performance-layout">
-            <div>
-              <StaffBars rows={report.byTechnician} admin/>
-              {!!report.byTechnician.length && <p className="admin-performance-caption">Performance Score (%)</p>}
-            </div>
-            <div className="admin-performance-rating">
-              <Star fill="currentColor"/>
-              <strong>{report.avgRating}<b>/5</b></strong>
-              <span>Average Rating</span>
-            </div>
+        <section className="admin-reference-card admin-reference-staff-card">
+          <div className="admin-reference-section-head">
+            <h2>Staff Performance</h2>
+            <span><Star size={12} fill="currentColor"/> rating</span>
+          </div>
+          <StaffBars rows={report.byTechnician} admin/>
+        </section>
+
+        <section className="admin-reference-card admin-reference-trend-card">
+          <div className="admin-reference-section-head">
+            <h2>Complaint Trend</h2>
+            <span className="trend-key"><i/>Complaints</span>
+          </div>
+          <TrendLine points={report.trend} admin/>
+        </section>
+
+        <section className="admin-reference-total-card">
+          <span><FileText/></span>
+          <div><small>Total Complaints</small><strong>{report.counts.total}</strong></div>
+          <div className="admin-reference-status-mini" aria-label="Complaint status summary">
+            <em>{report.counts.open} open</em>
+            <em>{report.counts.in_progress} in progress</em>
+            <em>{report.counts.closed} closed</em>
           </div>
         </section>
 
-        <section className="admin-analytics-card admin-status-summary-card">
-          <h2>Complaint Status Summary</h2>
-          <div className="admin-status-summary-grid">
-            <div className="total"><span><ClipboardList/></span><small>Total Complaints</small><strong>{report.counts.total}</strong></div>
-            <div className="open"><span><MessageCircle/></span><small>Open</small><strong>{report.counts.open}</strong></div>
-            <div className="progress"><span><Wrench/></span><small>In Progress</small><strong>{report.counts.in_progress}</strong></div>
-            <div className="closed"><span><CheckCircle2/></span><small>Closed</small><strong>{report.counts.closed}</strong></div>
-          </div>
-        </section>
-
-        <section className="admin-download-panel admin-download-panel-v2">
-          <h2><Download size={21}/>Downloadable Reports</h2>
-          {[
-            ['Monthly Maintenance Report', 'Summary of complaints by status and staff performance'],
-            ['Complaint Trend', 'Trend analysis of complaints over time by status'],
-            ['Staff Workload', 'Workload distribution and performance summary for staff members'],
-          ].map(([title, desc]) => (
-            <div className="admin-download-row" key={title}>
+        <section className="admin-reference-downloads">
+          <h2>Downloadable Reports</h2>
+          {reportRows.map(([id, item]) => (
+            <div className="admin-reference-download-row" key={id}>
               <span><FileText size={21}/></span>
-              <div><strong>{title}</strong><small>{desc}</small></div>
-              <button type="button" onClick={exportCSV}><Download size={19}/>Export</button>
+              <div><strong>{item.title}</strong><small>{item.description}</small></div>
+              <div className="admin-reference-download-actions">
+                <button type="button" onClick={() => handleExport(id)} disabled={Boolean(busyAction)} aria-label={`Export ${item.title}`}>
+                  <Download size={16}/><b>{busyAction === `export-${id}` ? '...' : 'Export'}</b>
+                </button>
+                <button type="button" className="send" onClick={() => handleSend(id)} disabled={Boolean(busyAction)} aria-label={`Send ${item.title}`} title={`Send ${item.title}`}>
+                  <Send size={16}/>
+                </button>
+              </div>
             </div>
           ))}
-          <p className="admin-report-note"><Info size={16}/>Exports use the selected date range and active status filter.</p>
         </section>
 
-        <div className="admin-report-export-all">
-          <strong><FileText size={20}/>Export Reports</strong>
-          <button type="button" onClick={exportPageAsPdf}><FileText size={19}/>Export as PDF</button>
-          <button type="button" onClick={exportCSV} disabled={exporting}><FileSpreadsheet size={19}/>{exporting ? 'Exporting…' : 'Export as CSV'}</button>
+        <div className="admin-reference-secondary-actions">
+          <button type="button" onClick={openPrintableReport}><Eye size={18}/>View / PDF</button>
+          <button type="button" onClick={() => handleSend('full')} disabled={Boolean(busyAction)}><Send size={18}/>{busyAction === 'send-full' ? 'Opening…' : 'Send Report'}</button>
         </div>
+
+        <button type="button" className="admin-reference-export-button" onClick={() => handleExport('full')} disabled={Boolean(busyAction)}>
+          <FileSpreadsheet size={21}/>{busyAction === 'export-full' ? 'Exporting Report…' : 'Export Report'}
+        </button>
       </div>
     );
   }
@@ -485,7 +683,7 @@ export function ReportsScreen({ onNavigate }) {
         <div>
           <p className="text-[11px] uppercase tracking-[.16em] font-bold text-blue-600 mb-1">Campus administration</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-950">Reports &amp; Analytics</h1>
-          <p className="text-sm text-slate-500 mt-1">Live complaint status and staff performance insights</p>
+          <p className="text-sm text-slate-500 mt-1">Live complaint status, staff completion and rating insights</p>
         </div>
         <button onClick={load} className="w-10 h-10 rounded-xl border border-slate-200 bg-white grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50" aria-label="Refresh report">
           <RefreshCw size={17}/>
@@ -515,33 +713,25 @@ export function ReportsScreen({ onNavigate }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2 mb-1"><h2 className="font-extrabold text-slate-900">Complaints by Category</h2><Info size={16} className="text-slate-400"/></div>
-          <DonutChart items={report.byCategory} total={report.filteredRows.length}/>
-          <p className="text-xs text-slate-400 mt-1">Total Complaints: <span className="font-bold text-slate-600">{report.filteredRows.length}</span></p>
+          <h2 className="font-extrabold text-slate-900 mb-1">Complaints by Category</h2>
+          <DonutChart items={report.byCategory} total={report.counts.total}/>
         </section>
 
         <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5">
-          <div className="flex items-center gap-2"><h2 className="font-extrabold text-slate-900">Monthly Trend</h2><Info size={16} className="text-slate-400"/></div>
-          <TrendLine points={report.monthlyTrend}/>
-          <p className="text-xs text-slate-400">Complaints Over Time</p>
+          <h2 className="font-extrabold text-slate-900">Complaint Trend</h2>
+          <TrendLine points={report.trend}/>
         </section>
 
         <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 sm:p-5 lg:col-span-2">
-          <div className="flex items-center gap-2 mb-4"><h2 className="font-extrabold text-slate-900">Staff Performance</h2><Info size={16} className="text-slate-400"/></div>
-          <div className="grid md:grid-cols-[1fr_180px] gap-6 items-center">
-            <div><StaffBars rows={report.byTechnician}/><p className="text-xs text-slate-400 mt-5">Performance Score (%)</p></div>
-            <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 text-center">
-              <Star className="mx-auto text-amber-400 fill-amber-400" size={34}/>
-              <strong className="block text-3xl text-slate-900 mt-2">{report.avgRating}<span className="text-base text-slate-500">/5</span></strong>
-              <span className="text-xs text-slate-500">Average Rating</span>
-            </div>
-          </div>
+          <div className="flex items-center justify-between gap-2 mb-4"><h2 className="font-extrabold text-slate-900">Staff Performance</h2><span className="text-sm font-bold text-amber-500">★ {report.avgRating}/5</span></div>
+          <StaffBars rows={report.byTechnician}/>
         </section>
       </div>
 
-      <button onClick={exportCSV} disabled={exporting} className="w-full min-h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-60">
-        <Download size={21}/>{exporting ? 'Exporting Report…' : 'Export Report'}
-      </button>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <button onClick={() => handleSend('full')} disabled={Boolean(busyAction)} className="min-h-14 rounded-2xl border border-blue-200 bg-white text-blue-700 font-extrabold text-base flex items-center justify-center gap-2 disabled:opacity-60"><Send size={20}/>Send Report</button>
+        <button onClick={() => handleExport('full')} disabled={Boolean(busyAction)} className="min-h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-60"><Download size={21}/>Export Report</button>
+      </div>
     </div>
   );
 }
