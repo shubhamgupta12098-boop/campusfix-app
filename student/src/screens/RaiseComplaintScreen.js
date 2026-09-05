@@ -63,7 +63,7 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
     const [success, setSuccess] = useState(null);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [categoryId, setCategoryId] = useState('electrical');
+    const [categoryId, setCategoryId] = useState('');
     const [building, setBuilding] = useState('');
     const [floor, setFloor] = useState('');
     const [room, setRoom] = useState('');
@@ -74,6 +74,7 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
     const galleryInputRef = useRef(null);
     const hasPhoto = media.some((item) => item.kind === 'image');
     const hasVideo = media.some((item) => item.kind === 'video');
+    const hasRequiredLocation = Boolean(building.trim() && floor.trim() && room.trim());
 
     const handleMediaUpload = async (event) => {
         const files = Array.from(event.target.files || []).slice(0, MAX_MEDIA);
@@ -128,7 +129,9 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
         setSuccess(null);
         if (!profile?.id)
             return setError('Please sign in again before submitting a complaint.');
-        if (!title.trim() || !description.trim() || !categoryId)
+        if (!categoryId.trim())
+            return setError('Category * is required. Please select a category before submitting the complaint.');
+        if (!title.trim() || !description.trim())
             return setError('Please fill in all required fields.');
         if (!building.trim() || !floor.trim() || !room.trim())
             return setError('Please enter building, floor and room/location.');
@@ -136,6 +139,11 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
             return setError('Photo * is required before submitting a complaint.');
         setSubmitting(true);
         const selectedCat = FIXED_CATEGORIES.find((category) => category.id === categoryId);
+        if (!selectedCat) {
+            setError('Please select a valid complaint category.');
+            setSubmitting(false);
+            return;
+        }
         const now = new Date();
         const expectedCompletion = new Date(now.getTime() + selectedCat.sla_hours * 60 * 60 * 1000);
         const complaintNo = `CMP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getTime()).slice(-6)}`;
@@ -235,8 +243,9 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
 
       <form onSubmit={handleSubmit} className="student-submit-form">
         <section className="student-form-card">
-          <label htmlFor="category" className="student-field-label"><MapPin size={19}/>Category</label>
-          <select id="category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+          <label htmlFor="category" className="student-field-label"><MapPin size={19}/>Category <span>*</span></label>
+          <select id="category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} required aria-required="true">
+            <option value="" disabled>Select complaint category *</option>
             {FIXED_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </section>
@@ -252,7 +261,7 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
         </section>
 
         <section className="student-form-card">
-          <label className="student-field-label"><MapPin size={19}/>Location</label>
+          <label className="student-field-label"><MapPin size={19}/>Location <span>*</span></label>
           <div className="student-location-grid">
             <label><Building2 size={25}/><input value={building} onChange={(event) => setBuilding(event.target.value)} required placeholder="Main Block"/></label>
             <label><Layers3 size={25}/><input value={floor} onChange={(event) => setFloor(event.target.value)} required inputMode="numeric" placeholder="Floor 2"/></label>
@@ -286,7 +295,7 @@ export function RaiseComplaintScreen({ onDone, onBack }) {
           <small>Photo * required • Video optional • Max {MAX_MEDIA} attachments</small>
         </section>
 
-        <button type="submit" disabled={submitting || !hasPhoto} className="student-submit-button"><Send size={22}/>{submitting ? 'Submitting…' : !hasPhoto ? 'Photo * Required' : 'Submit Complaint'}</button>
+        <button type="submit" disabled={submitting || !hasPhoto || !categoryId || !hasRequiredLocation} className="student-submit-button"><Send size={22}/>{submitting ? 'Submitting…' : !categoryId ? 'Select Category *' : !hasRequiredLocation ? 'Location * Required' : !hasPhoto ? 'Photo * Required' : 'Submit Complaint'}</button>
       </form>
     </div>);
 }

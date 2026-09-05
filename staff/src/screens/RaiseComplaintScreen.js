@@ -65,7 +65,7 @@ export function RaiseComplaintScreen({ onDone }) {
     const [success, setSuccess] = useState(null);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [categoryId, setCategoryId] = useState('electrical');
+    const [categoryId, setCategoryId] = useState('');
     const [building, setBuilding] = useState('');
     const [floor, setFloor] = useState('');
     const [room, setRoom] = useState('');
@@ -76,6 +76,7 @@ export function RaiseComplaintScreen({ onDone }) {
     const galleryInputRef = useRef(null);
     const hasPhoto = media.some((item) => item.kind === 'image');
     const hasVideo = media.some((item) => item.kind === 'video');
+    const hasRequiredLocation = Boolean(building.trim() && floor.trim() && room.trim());
 
     const handleMediaUpload = async (event) => {
         const files = Array.from(event.target.files || []).slice(0, MAX_MEDIA);
@@ -128,7 +129,9 @@ export function RaiseComplaintScreen({ onDone }) {
         setSuccess(null);
         if (!profile?.id)
             return setError('Please sign in again before submitting a complaint.');
-        if (!title.trim() || !description.trim() || !categoryId)
+        if (!categoryId.trim())
+            return setError('Category * is required. Please select a category before submitting the complaint.');
+        if (!title.trim() || !description.trim())
             return setError('Please fill in all required fields.');
         if (!building.trim() || !floor.trim() || !room.trim())
             return setError('Please enter building, floor and room/location.');
@@ -137,6 +140,11 @@ export function RaiseComplaintScreen({ onDone }) {
 
         setSubmitting(true);
         const selectedCat = FIXED_CATEGORIES.find((category) => category.id === categoryId);
+        if (!selectedCat) {
+            setError('Please select a valid complaint category.');
+            setSubmitting(false);
+            return;
+        }
         const now = new Date();
         const expectedCompletion = new Date(now.getTime() + selectedCat.sla_hours * 60 * 60 * 1000);
         const complaintNo = `CMP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getTime()).slice(-6)}`;
@@ -234,7 +242,8 @@ export function RaiseComplaintScreen({ onDone }) {
       <form onSubmit={handleSubmit} className="space-y-5">
         <Card className="p-5">
           <label htmlFor="category" className="block text-sm font-semibold text-slate-900 mb-2">Category *</label>
-          <select id="category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+          <select id="category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} required aria-required="true" className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+            <option value="" disabled>Select complaint category *</option>
             {FIXED_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </Card>
@@ -282,7 +291,7 @@ export function RaiseComplaintScreen({ onDone }) {
           <p className="mt-3 text-center text-xs text-slate-400">Photos &amp; videos supported · video max 20 MB · {media.length}/{MAX_MEDIA} selected</p>
         </Card>
 
-        <button type="submit" disabled={submitting || !hasPhoto} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Send className="w-4 h-4"/>{submitting ? 'Submitting…' : !hasPhoto ? 'Photo * Required' : 'Submit Complaint'}</button>
+        <button type="submit" disabled={submitting || !hasPhoto || !categoryId || !hasRequiredLocation} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 disabled:cursor-not-allowed disabled:opacity-50"><Send className="w-4 h-4"/>{submitting ? 'Submitting…' : !categoryId ? 'Select Category *' : !hasRequiredLocation ? 'Location * Required' : !hasPhoto ? 'Photo * Required' : 'Submit Complaint'}</button>
       </form>
     </div>);
 }

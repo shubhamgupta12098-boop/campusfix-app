@@ -109,7 +109,15 @@ function normalizeRow(store, input, auth, existing = null) {
 }
 
 async function validateRow(store, row, existing = null) {
-  if (store === 'complaints' && !hasComplaintPhoto(row)) throw Object.assign(new Error('Photo * is required. Complaint cannot be saved without at least one photo.'), { status: 400 });
+  if (store === 'complaints') {
+    const categoryId = String(row?.category_id || '').trim();
+    if (!categoryId) throw Object.assign(new Error('Category * is required. Complaint cannot be saved without a category.'), { status: 400 });
+    row.category_id = categoryId;
+    const locationDescription = String(row?.location_description || '').trim();
+    if (!locationDescription) throw Object.assign(new Error('Location * is required. Complaint cannot be saved without a location.'), { status: 400 });
+    row.location_description = locationDescription;
+    if (!hasComplaintPhoto(row)) throw Object.assign(new Error('Photo * is required. Complaint cannot be saved without at least one photo.'), { status: 400 });
+  }
   if (store === 'profiles' && !row.email) throw Object.assign(new Error('Profile email is required.'), { status: 400 });
   if (store === 'work_orders' && row.status === 'in_progress' && (!Array.isArray(row.before_photo_urls) || row.before_photo_urls.filter(Boolean).length < 1)) {
     throw Object.assign(new Error('Before photo is required before work can start.'), { status: 400 });
