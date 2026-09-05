@@ -136,7 +136,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
           <div className="admin-mobile-stat-row admin-mobile-stat-row-with-rejected">
             <AdminReferenceStat icon={ClipboardList} tone="blue" label="Total Complaints" value={stats.total} meta={`${openCount + inProgress} active`} onClick={() => onOpenComplaints?.('total')}/>
             <AdminReferenceStat icon={AlertTriangle} tone="green" label="Open" value={openCount} meta={`${stats.unassigned} unassigned`} onClick={() => onOpenComplaints?.('open')}/>
-            <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta={`${Math.max(activeStaff, 1)} staff`} onClick={() => onOpenComplaints?.('in_progress')}/>
+            <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta="Active work" onClick={() => onOpenComplaints?.('in_progress')}/>
             <AdminReferenceStat icon={CheckCircle2} tone="amber" label="Closed" value={stats.resolved} meta="Completed complaints" onClick={() => onOpenComplaints?.('closed')}/>
             <AdminReferenceStat icon={AlertTriangle} tone="red" label="Rejected" value={rejectedComplaints.length} meta="Dashboard only" onClick={() => setShowRejected((value) => !value)}/>
           </div>

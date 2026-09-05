@@ -8433,11 +8433,80 @@ svg.lucide-star {
 }
 
 @media (max-width: 520px) {
+  /* Keep the Home stat layout like the reference on phones:
+     Total / Open / In Progress on row one, Closed / Rejected on row two. */
   .admin-mobile-stat-row-with-rejected {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
   }
 
   .admin-mobile-stat-row-with-rejected .admin-reference-stat {
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    min-width: 0 !important;
     min-height: 86px !important;
+    padding: 8px 7px !important;
+    gap: 6px !important;
+    overflow: hidden !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat-icon {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat-icon svg {
+    width: 19px !important;
+    height: 19px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat > div {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat small {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 8px !important;
+    line-height: 1.05 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat strong {
+    margin-top: 3px !important;
+    font-size: 22px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .admin-mobile-stat-row-with-rejected {
+    gap: 5px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat {
+    grid-template-columns: 29px minmax(0, 1fr) !important;
+    padding: 7px 5px !important;
+    gap: 4px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat-icon {
+    width: 29px !important;
+    height: 29px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat-icon svg {
+    width: 17px !important;
+    height: 17px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat small {
+    font-size: 7px !important;
+  }
+
+  .admin-mobile-stat-row-with-rejected .admin-reference-stat strong {
+    font-size: 20px !important;
   }
 }
