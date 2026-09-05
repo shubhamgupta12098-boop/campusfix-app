@@ -4260,3 +4260,15 @@ select option:hover { background: #159763 !important; color: #ffffff !important;
 .staff-detail-repair-note { margin-top:12px; padding:10px 12px; border:1px solid #244658; border-radius:10px; background:#071925; color:#b9c8d2; font-size:12px; }
 .staff-detail-repair-note strong { display:block; color:#2bd8ee; margin-bottom:3px; }
 @media (max-width:420px){ .staff-detail-evidence-grid{grid-template-columns:1fr;} }
+
+/* CCMMS: keep every star icon yellow across ratings and feedback UI. */
+svg.lucide-star {
+  color: #facc15 !important;
+  stroke: #facc15 !important;
+}
+.admin-rating-stars,
+.staff-stars,
+.student-stars,
+.student-rating-row-name small {
+  color: #facc15 !important;
+}

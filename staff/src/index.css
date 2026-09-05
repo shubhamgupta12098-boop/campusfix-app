@@ -7823,3 +7823,15 @@ select option:hover { background: #159763 !important; color: #ffffff !important;
     height: 24px;
   }
 }
+
+/* CCMMS: keep every star icon yellow across ratings and feedback UI. */
+svg.lucide-star {
+  color: #facc15 !important;
+  stroke: #facc15 !important;
+}
+.admin-rating-stars,
+.staff-stars,
+.student-stars,
+.student-rating-row-name small {
+  color: #facc15 !important;
+}
