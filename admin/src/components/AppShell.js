@@ -34,6 +34,7 @@ import { AppPerformanceScreen } from '@/screens/AppPerformanceScreen';
 import { ComplaintsScreen } from '@/screens/ComplaintsScreen';
 import { StaffPerformanceScreen } from '@/screens/StaffPerformanceScreen';
 import { TopCategoriesScreen } from '@/screens/TopCategoriesScreen';
+import { HelpSupportScreen } from '@/screens/HelpSupportScreen';
 import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -132,6 +133,7 @@ const ADMIN_SCREEN_TITLES = {
     'complaint-detail': 'Complaint Details',
     'staff-performance': 'Staff Performance',
     'top-categories': 'Top Categories',
+    'help-support': 'Help & Support',
 };
 
 const ADMIN_SIDEBAR_ITEMS = [
@@ -242,6 +244,7 @@ export const AppShell = () => {
         : role === 'admin' && screen === 'app-performance' ? 'profile'
         : role === 'admin' && screen === 'staff-performance' ? 'reports'
         : role === 'admin' && screen === 'top-categories' ? 'reports'
+        : role === 'admin' && screen === 'help-support' ? 'profile'
         : role === 'admin' && screen === 'complaints' ? 'dashboard'
         : screen;
 
@@ -273,10 +276,10 @@ export const AppShell = () => {
     const actionActive = activeScreen === bottomNav.action.id;
     const ActionIcon = bottomNav.action.icon;
     const adminPageTitle = ADMIN_SCREEN_TITLES[screen] || 'Campus Maintenance';
-    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'app-performance', 'staff-performance', 'top-categories', 'complaints', 'complaint-detail']);
+    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'app-performance', 'staff-performance', 'top-categories', 'help-support', 'complaints', 'complaint-detail']);
     const showAdminBack = role === 'admin' && adminBackScreens.has(screen);
     const defaultComplaintReturn = role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign';
-    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : screen === 'app-performance' ? 'profile' : ['staff-performance', 'top-categories'].includes(screen) ? 'reports' : 'dashboard';
+    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : ['app-performance', 'help-support'].includes(screen) ? 'profile' : ['staff-performance', 'top-categories'].includes(screen) ? 'reports' : 'dashboard';
 
     return (<div className={'campus-app-shell ' + (role === 'admin' ? `admin-ui admin-screen-${screen} ` : '') + (role === 'admin' && screen === 'profile' ? 'admin-profile-mode ' : '') + (role === 'admin' && showAdminBack ? 'admin-has-back ' : '')}>
       <div className="campus-app-frame">
@@ -400,6 +403,7 @@ export const AppShell = () => {
             {screen === 'complaints' && <ComplaintsScreen initialFilter={complaintsFilter} onFilterChange={setComplaintsFilter} onOpenComplaint={(id) => openComplaint(id, 'complaints')}/>}
             {screen === 'staff-performance' && <StaffPerformanceScreen/>}
             {screen === 'top-categories' && <TopCategoriesScreen/>}
+            {screen === 'help-support' && <HelpSupportScreen onBack={() => navigate('profile')} onNotifications={() => navigate('notifications')}/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}
           </ErrorBoundary>
         </main>

@@ -14,6 +14,7 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
     const [profiles, setProfiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [showRejected, setShowRejected] = useState(false);
     const role = profile?.role ?? 'student';
     const isAdmin = role === 'admin';
     const isStaff = role === 'staff';
@@ -132,13 +133,15 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
           </div>
 
           <div className="admin-section-kicker">OVERALL STATS</div>
-          <div className="admin-mobile-stat-row">
+          <div className="admin-mobile-stat-row admin-mobile-stat-row-with-rejected">
             <AdminReferenceStat icon={ClipboardList} tone="blue" label="Total Complaints" value={stats.total} meta={`${openCount + inProgress} active`} onClick={() => onOpenComplaints?.('total')}/>
             <AdminReferenceStat icon={AlertTriangle} tone="green" label="Open" value={openCount} meta={`${stats.unassigned} unassigned`} onClick={() => onOpenComplaints?.('open')}/>
             <AdminReferenceStat icon={Wrench} tone="cyan" label="In Progress" value={inProgress} meta={`${Math.max(activeStaff, 1)} staff`} onClick={() => onOpenComplaints?.('in_progress')}/>
+            <AdminReferenceStat icon={CheckCircle2} tone="amber" label="Closed" value={stats.resolved} meta="Completed complaints" onClick={() => onOpenComplaints?.('closed')}/>
+            <AdminReferenceStat icon={AlertTriangle} tone="red" label="Rejected" value={rejectedComplaints.length} meta="Dashboard only" onClick={() => setShowRejected((value) => !value)}/>
           </div>
 
-          <RejectedHomePanel complaints={rejectedComplaints} onOpenComplaint={onOpenComplaint}/>
+          {showRejected && <RejectedHomePanel complaints={rejectedComplaints} onOpenComplaint={onOpenComplaint}/>}
 
           <button type="button" onClick={() => onNavigate('feedback')} className="admin-rating-card admin-rating-card-button" aria-label="Open feedback and ratings">
             <span>Average Rating</span>
@@ -203,12 +206,11 @@ export function DashboardScreen({ onNavigate, onOpenComplaint, onOpenComplaints 
     </div>);
 }
 function RejectedHomePanel({ complaints, onOpenComplaint }) {
-    const visible = complaints.slice(0, 3);
-    return <section className="admin-rejected-home" aria-label="Rejected complaints">
-      <div className="admin-rejected-home-head">
-        <span className="admin-rejected-home-icon"><AlertTriangle/></span>
-        <div><small>HOME ONLY</small><strong>Rejected Complaints</strong><p>Not included in totals, reports or categories.</p></div>
-        <b>{complaints.length}</b>
+    const visible = complaints.slice(0, 5);
+    return <section className="admin-rejected-home admin-rejected-home-compact" aria-label="Rejected complaints">
+      <div className="admin-rejected-home-title">
+        <strong>Rejected Complaints</strong>
+        <span>{complaints.length}</span>
       </div>
       {visible.length > 0 && <div className="admin-rejected-home-list">
         {visible.map((complaint) => <button key={complaint.id} type="button" onClick={() => onOpenComplaint?.(complaint.id)}>

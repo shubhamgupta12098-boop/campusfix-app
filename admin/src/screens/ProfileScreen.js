@@ -182,6 +182,7 @@ export function ProfileScreen({ onNavigate }) {
           onNotifications={() => onNavigate?.('notifications')}
           onRatings={() => onNavigate?.('feedback')}
           onPerformance={() => onNavigate?.('app-performance')}
+          onHelp={() => onNavigate?.('help-support')}
           onEdit={openEditor}
           onPassword={() => setPwOpen(true)}
           onLogout={signOut}
@@ -450,7 +451,7 @@ export function ProfileScreen({ onNavigate }) {
     </div>);
 }
 
-function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotifications, onRatings, onPerformance, onEdit, onPassword, onLogout, editing, setEditing, form, setForm, saving, saveError, saveSuccess, handleSave, pwOpen, setPwOpen, pwForm, setPwForm, pwSaving, pwError, pwSuccess, showPw, setShowPw, handleChangePassword }) {
+function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotifications, onRatings, onPerformance, onHelp, onEdit, onPassword, onLogout, editing, setEditing, form, setForm, saving, saveError, saveSuccess, handleSave, pwOpen, setPwOpen, pwForm, setPwForm, pwSaving, pwError, pwSuccess, showPw, setShowPw, handleChangePassword }) {
     const displayName = profile?.full_name || 'Admin User';
     const rating = avgRating && Number(avgRating) > 0 ? avgRating : '—';
     return (<div className="admin-profile-page">
@@ -487,7 +488,7 @@ function AdminProfilePage({ profile, user, total, avgRating, onBack, onNotificat
         <AdminProfileMenuRow icon={Lock} label="Change Password" onClick={onPassword}/>
         <AdminProfileMenuRow icon={Bell} label="Notification Settings" onClick={onNotifications}/>
         <AdminProfileMenuRow icon={Activity} label="App Performance" onClick={onPerformance}/>
-        <AdminProfileMenuRow icon={HelpCircle} label="Help & Support" onClick={() => window.alert('CampusFix support: contact your campus maintenance help desk.')}/>
+        <AdminProfileMenuRow icon={HelpCircle} label="Help & Support" onClick={onHelp}/>
         <AdminProfileMenuRow icon={LogOut} label="Logout" danger onClick={onLogout}/>
       </section>
 
