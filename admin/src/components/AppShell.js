@@ -32,6 +32,7 @@ import { FeedbackScreen } from '@/screens/FeedbackScreen';
 import { ApprovalScreen } from '@/screens/ApprovalScreen';
 import { AppPerformanceScreen } from '@/screens/AppPerformanceScreen';
 import { ComplaintsScreen } from '@/screens/ComplaintsScreen';
+import { StaffPerformanceScreen } from '@/screens/StaffPerformanceScreen';
 import { localData } from '@/lib/localDataClient';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -91,6 +92,15 @@ const BOTTOM_NAV = {
     },
 };
 
+
+const STAFF_PERFORMANCE_NAV = [
+    { id: 'dashboard', label: 'Dashboard', icon: Home },
+    { id: 'users', label: 'Staff', icon: Users },
+    { id: 'complaints', label: 'Complaints', icon: ClipboardList },
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'profile', label: 'Settings', icon: Settings },
+];
+
 const ROLE_LABELS = {
     student: 'Student portal',
     staff: 'Maintenance portal',
@@ -111,6 +121,7 @@ const ADMIN_SCREEN_TITLES = {
     'app-performance': 'App Performance',
     complaints: 'Complaints',
     'complaint-detail': 'Complaint Details',
+    'staff-performance': 'Staff Performance',
 };
 
 const ADMIN_SIDEBAR_ITEMS = [
@@ -219,6 +230,7 @@ export const AppShell = () => {
         : role === 'admin' && screen === 'feedback' ? 'reports'
         : role === 'admin' && screen === 'my-jobs' ? 'work-orders'
         : role === 'admin' && screen === 'app-performance' ? 'profile'
+        : role === 'admin' && screen === 'staff-performance' ? 'reports'
         : role === 'admin' && screen === 'complaints' ? 'dashboard'
         : screen;
 
@@ -250,10 +262,10 @@ export const AppShell = () => {
     const actionActive = activeScreen === bottomNav.action.id;
     const ActionIcon = bottomNav.action.icon;
     const adminPageTitle = ADMIN_SCREEN_TITLES[screen] || 'Campus Maintenance';
-    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'app-performance', 'complaints', 'complaint-detail']);
+    const adminBackScreens = new Set(['notifications', 'users', 'feedback', 'profile', 'app-performance', 'staff-performance', 'complaints', 'complaint-detail']);
     const showAdminBack = role === 'admin' && adminBackScreens.has(screen);
     const defaultComplaintReturn = role === 'student' ? 'my-complaints' : role === 'staff' ? 'technician-jobs' : 'assign';
-    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : screen === 'app-performance' ? 'profile' : 'dashboard';
+    const adminBackTarget = screen === 'complaint-detail' ? (complaintReturnScreen || defaultComplaintReturn) : screen === 'app-performance' ? 'profile' : screen === 'staff-performance' ? 'reports' : 'dashboard';
 
     return (<div className={'campus-app-shell ' + (role === 'admin' ? `admin-ui admin-screen-${screen} ` : '') + (role === 'admin' && screen === 'profile' ? 'admin-profile-mode ' : '') + (role === 'admin' && showAdminBack ? 'admin-has-back ' : '')}>
       <div className="campus-app-frame">
@@ -315,6 +327,8 @@ export const AppShell = () => {
                     <button type="button" className="campus-icon-button" onClick={() => window.dispatchEvent(new CustomEvent('campusfix:complaints-filter-toggle'))} aria-label="Filter complaints" title="Filter complaints"><ListFilter size={24}/></button>
                     <button type="button" className="campus-icon-button" onClick={() => window.dispatchEvent(new CustomEvent('campusfix:complaints-focus-search'))} aria-label="Search complaints" title="Search complaints"><Search size={25}/></button>
                   </div>
+                ) : screen === 'staff-performance' ? (
+                  <button type="button" className="campus-icon-button admin-staff-performance-filter-button" onClick={() => window.dispatchEvent(new CustomEvent('campusfix:staff-performance-filter-toggle'))} aria-label="Filter staff performance" title="Filter staff performance"><ListFilter size={25}/></button>
                 ) : screen === 'notifications' ? (
                   <button
                     type="button"
@@ -329,7 +343,7 @@ export const AppShell = () => {
                     {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
                   </button>
                 )}
-                {screen !== 'notifications' && screen !== 'reports' && screen !== 'complaints' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
+                {screen !== 'notifications' && screen !== 'reports' && screen !== 'complaints' && screen !== 'staff-performance' && <button type="button" onClick={() => navigate('profile')} className="campus-mini-avatar" aria-label="Open profile">{initials}</button>}
               </div>
             </>
           ) : (
@@ -371,13 +385,14 @@ export const AppShell = () => {
             {screen === 'profile' && <ProfileScreen onNavigate={navigate}/>}
             {screen === 'app-performance' && <AppPerformanceScreen/>}
             {screen === 'complaints' && <ComplaintsScreen initialFilter={complaintsFilter} onFilterChange={setComplaintsFilter} onOpenComplaint={(id) => openComplaint(id, 'complaints')}/>}
+            {screen === 'staff-performance' && <StaffPerformanceScreen/>}
             {screen === 'feedback' && <FeedbackScreen onOpenComplaint={(id) => openComplaint(id, 'feedback')}/>}
           </ErrorBoundary>
         </main>
 
         <nav className="campus-bottom-nav" aria-label="Primary navigation">
           {role === 'admin' ? (
-            [...bottomNav.left, bottomNav.action, ...bottomNav.right].map(renderNavButton)
+            (screen === 'staff-performance' ? STAFF_PERFORMANCE_NAV : [...bottomNav.left, bottomNav.action, ...bottomNav.right]).map(renderNavButton)
           ) : (
             <>
               {bottomNav.left.map(renderNavButton)}

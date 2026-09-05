@@ -399,7 +399,7 @@ function TrendLine({ points, admin = false }) {
   );
 }
 
-export function ReportsScreen() {
+export function ReportsScreen({ onNavigate }) {
   const { profile } = useAuthStore();
   const initialDates = useMemo(() => defaultAdminDates(), []);
   const [complaints, setComplaints] = useState([]);
@@ -565,6 +565,14 @@ export function ReportsScreen() {
     setAdminEndDate(next.end);
   };
 
+  const openStaffPerformance = () => onNavigate?.('staff-performance');
+  const onStaffPerformanceKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openStaffPerformance();
+    }
+  };
+
   if (loading) return <Spinner/>;
 
   if (profile?.role === 'admin') {
@@ -612,7 +620,7 @@ export function ReportsScreen() {
             <DonutChart items={report.byCategory} total={report.counts.total} admin/>
           </section>
 
-          <section className="admin-reference-card admin-reference-rating-card">
+          <section className="admin-reference-card admin-reference-rating-card admin-reference-clickable-card" role="button" tabIndex={0} onClick={openStaffPerformance} onKeyDown={onStaffPerformanceKeyDown} aria-label="Open Staff Performance">
             <h2>Staff Performance</h2>
             <span>Average Rating</span>
             <div className="admin-reference-rating-value"><Star fill="currentColor"/><strong>{report.avgRating}</strong><b>/5</b></div>
@@ -621,7 +629,7 @@ export function ReportsScreen() {
           </section>
         </div>
 
-        <section className="admin-reference-card admin-reference-staff-card">
+        <section className="admin-reference-card admin-reference-staff-card admin-reference-clickable-card" role="button" tabIndex={0} onClick={openStaffPerformance} onKeyDown={onStaffPerformanceKeyDown} aria-label="Open detailed Staff Performance">
           <div className="admin-reference-section-head">
             <h2>Staff Performance</h2>
             <span><Star size={12} fill="currentColor"/> rating</span>
